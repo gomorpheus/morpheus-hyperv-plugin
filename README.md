@@ -17,7 +17,7 @@ The following options are required when setting up a Morpheus Cloud to a Hyper-V
 3. Username
 4. Password
 
-For additional documentation on setting up the cloud refer to the [full documentation](https://docs.morpheusdata.com/en/latest/integration_guides/Clouds/hyperv/hyperv.html#adding-hyper-v-as-a-private-cloud).
+For additional details on setting up the cloud refer to the [full documentation](https://docs.morpheusdata.com/en/latest/integration_guides/Clouds/hyperv/hyperv.html#adding-hyper-v-as-a-private-cloud).
 
 #### Features
 Cloud sync: hosts, networks, and virtual machines are fetched from Hyper-V and inventoried in Morpheus. Any additions, updates, and removals to these objects are reflected in Morpheus.
