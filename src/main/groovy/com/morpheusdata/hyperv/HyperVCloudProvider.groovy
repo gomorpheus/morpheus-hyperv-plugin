@@ -22,7 +22,7 @@ import com.morpheusdata.request.ValidateCloudRequest
 import com.morpheusdata.response.ServiceResponse
 
 class HyperVCloudProvider implements CloudProvider {
-	public static final String CLOUD_PROVIDER_CODE = 'morpheus-hyperv-plugin.cloud'
+	public static final String CLOUD_PROVIDER_CODE = 'hyperv'
 
 	protected MorpheusContext context
 	protected Plugin plugin
@@ -39,7 +39,7 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	String getDescription() {
-		return 'Describe me!'
+		return 'Hyper-V'
 	}
 
 	/**
@@ -262,7 +262,7 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	Boolean supportsDistributedWorker() {
-		return false
+		return true
 	}
 
 	/**

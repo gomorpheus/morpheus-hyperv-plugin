@@ -33,7 +33,7 @@ class HyperVBackupTypeProvider extends AbstractBackupTypeProvider {
 	 */
 	@Override
 	String getCode() {
-		return "morpheus-hyperv-pluginBackupTypeProvider"
+		return "hypervSnapshot"
 	}
 
 	/**
@@ -44,7 +44,7 @@ class HyperVBackupTypeProvider extends AbstractBackupTypeProvider {
 	 */
 	@Override
 	String getName() {
-		return "Hyper-VBackupTypeProvider"
+		return "Hyper-V VM Snapshot"
 	}
 	
 	/**
@@ -89,7 +89,7 @@ class HyperVBackupTypeProvider extends AbstractBackupTypeProvider {
 	 */
 	@Override
 	Boolean getRestoreNewEnabled() {
-		return true
+		return false
 	}
 
 	/**
@@ -98,7 +98,7 @@ class HyperVBackupTypeProvider extends AbstractBackupTypeProvider {
 	 */
 	@Override
 	String getRestoreType() {
-		return "online"
+		return "offline"
 	}
 
 	/**
@@ -124,7 +124,7 @@ class HyperVBackupTypeProvider extends AbstractBackupTypeProvider {
 	 */
 	@Override
 	String getRestoreNewMode() {
-		return "VM_RESTORE"
+		return null
 	}
 	
 	/**
