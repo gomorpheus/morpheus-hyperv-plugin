@@ -16,7 +16,7 @@ import com.morpheusdata.response.ProvisionResponse
 import com.morpheusdata.response.ServiceResponse
 
 class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider {
-	public static final String PROVISION_PROVIDER_CODE = 'morpheus-hyperv-plugin.provision'
+	public static final String PROVISION_PROVIDER_CODE = 'hyperv'
 
 	protected MorpheusContext context
 	protected Plugin plugin
