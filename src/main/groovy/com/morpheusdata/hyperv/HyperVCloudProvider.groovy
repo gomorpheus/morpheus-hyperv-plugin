@@ -28,12 +28,13 @@ class HyperVCloudProvider implements CloudProvider {
 
 	protected MorpheusContext context
 	protected Plugin plugin
-	
+	HyperVApiService apiService
 
 	public HyperVCloudProvider(Plugin plugin, MorpheusContext ctx) {
 		super()
 		this.@plugin = plugin
 		this.@context = ctx
+		this.apiService = new HyperVApiService(ctx)
 	}
 
 	/**
@@ -158,15 +159,15 @@ class HyperVCloudProvider implements CloudProvider {
 	@Override
 	ServiceResponse validate(Cloud cloud, ValidateCloudRequest validateCloudRequest) {
 		log.info("validateZone: ${cloud}")
-		ServiceResponse response = ServiceResponse.prepare()
-		//def rtn = [success:false, zone:cloud, errors:[:]]
+		def rtn = [success:false, zone:cloud, errors:[:]]
 		try {
 			if(cloud) {
 				def  requiredFields = ['host', 'workingPath', 'vmPath', 'diskPath']
 				def hypervOpts = getHypervZoneOpts(cloud)
-				def zoneConfig = cloud.getConfigMap()
-				rtn.errors = validateRequiredConfigFields(requiredFields, zoneConfig)
-				def credential = credentialService.loadCredentialConfig(opts.credential, zoneConfig)
+				def cloudConfig = cloud.getConfigMap()
+				rtn.errors = validateRequiredConfigFields(requiredFields, cloudConfig) // check:
+				//def credential = credentialService.loadCredentialConfig(opts.credential, zoneConfig)
+				def credential = context.async.accountCredential.loadCredentialConfig(opts.credential, cloudConfig).blockingGet()
 				if(!credential.data?.username) {
 					rtn.msg = 'Enter a username'
 					rtn.errors.username = rtn.msg
@@ -175,10 +176,10 @@ class HyperVCloudProvider implements CloudProvider {
 					rtn.errors.password = rtn.msg
 				}
 				if(rtn.errors.size() == 0) {
-					if(zone.enabled == true) {
-						hypervOpts += [hypervisor:[:], sshHost:zoneConfig.host, sshUsername:credential.data.username,
-									   sshPassword:credential.data.password, zoneRoot:zoneConfig.workingPath, diskRoot:zoneConfig.diskPath, vmRoot:zoneConfig.vmPath]
-						def vmSwitches = HypervComputeUtility.listVmSwitches(hypervOpts)
+					if(cloud.enabled == true) {
+						hypervOpts += [hypervisor:[:], sshHost:cloudConfig.host, sshUsername:credential.data.username,
+									   sshPassword:credential.data.password, zoneRoot:cloudConfig.workingPath, diskRoot:cloudConfig.diskPath, vmRoot:cloudConfig.vmPath]
+						def vmSwitches = apiService.listVmSwitches(hypervOpts)
 						if(vmSwitches.success == true)
 							rtn.success = true
 						if(rtn.success == false)
