@@ -1,5 +1,6 @@
-package com.morpheusdata.hyperv.utils
+package com.morpheusdata.hyperv
 
+import com.morpheusdata.core.MorpheusContext
 import groovy.json.JsonOutput
 import groovy.util.logging.Slf4j
 
@@ -8,16 +9,23 @@ import groovy.util.logging.Slf4j
  */
 
 @Slf4j
-class HypervComputeUtility {
+class HyperVApiService {
 
-    // TODO: need to implement morpheusContext.executeWindowsCommand method during the implementation of User story
-    // TODO: as of now executeCommand method is commented in this file
-    // TODO: morpheusContext.executeWindowsCommand(String address, Integer port, String username, String password, String command, Boolean noProfile, Boolean elevated)
+    MorpheusContext morpheusContext
+
+    HyperVApiService(MorpheusContext morpheusContext) {
+        this.morpheusContext = morpheusContext
+    }
 
     static defaultRoot = 'C:\\morpheus'
 
+    def executeCommand(command, opts) {
+        def output
+        //= morpheusContext.executeWindowsCommand(address, port, username, password, command, noProfile, elevated)
+        return output
+    }
 
-    static prepareNode(opts) {
+    def prepareNode(opts) {
         def zoneRoot = opts.zoneRoot ?: defaultRoot
         def command = "mkdir \"${zoneRoot}\\images\""
         def out = executeCommand(command, opts)
@@ -25,68 +33,71 @@ class HypervComputeUtility {
         out = executeCommand(command, opts)
     }
 
-    static insertContainerImage(opts) {
-        def rtn = [success:false, imageExists:false]
+    def insertContainerImage(opts) {
+        def rtn = [success: false, imageExists: false]
         def zoneRoot = opts.zoneRoot ?: defaultRoot
         def image = opts.image
         def imageName = image.name
-        def imageFolderName = formatImageFolder(imageName) // check: formatImageFolder ??
+        def imageFolderName = formatImageFolder(imageName)
         def tgtFolder = "${zoneRoot}\\images\\${imageFolderName}"
         def match = findImage(opts, imageName)
         log.info("findImage: ${match}")
-        if(match.imageExists == false) {
+        if (match.imageExists == false) {
             //transfer it to host
             def transferResults = transferImage(opts, image.cloudFiles, imageName)
             log.debug "transferImage: ${transferResults}"
-            if(transferResults.success == true) {
+            if (transferResults.success == true) {
                 //clone it to vm folder
-                rtn.image = [path:tgtFolder, name:imageName]
+                rtn.image = [path: tgtFolder, name: imageName]
                 rtn.imageId = tgtFolder
                 rtn.success = true
             } else {
                 rtn.msg = 'Error transferring image'
             }
         } else {
-            rtn.image = [path:tgtFolder, name:match.imageName]
+            rtn.image = [path: tgtFolder, name: match.imageName]
             rtn.imageId = tgtFolder
             rtn.success = true
         }
         return rtn
     }
 
-    static transferImage(morpheusContext, opts, cloudFiles, imageName) {
-        def rtn = [success:false, results:[]]
-        def metadataFile = cloudFiles?.findAll{cloudFile -> cloudFile.name == 'metadata.json'}
-        def vhdFiles = cloudFiles?.findAll{cloudFile -> cloudFile.name.indexOf('.vhd') > -1 || cloudFile.name.indexOf('.vhdx')}
+    def transferImage(opts, cloudFiles, imageName) {
+        def rtn = [success: false, results: []]
+        def metadataFile = cloudFiles?.findAll { cloudFile -> cloudFile.name == 'metadata.json' }
+        def vhdFiles = cloudFiles?.findAll { cloudFile -> cloudFile.name.indexOf('.vhd') > -1 || cloudFile.name.indexOf('.vhdx') }
         log.info("vhdFiles: ${vhdFiles}")
         def zoneRoot = opts.zoneRoot ?: defaultRoot
-        def imageFolderName = formatImageFolder(imageName) // check: formatImageFolder ??
+        def imageFolderName = formatImageFolder(imageName)
         def fileList = []
         def tgtFolder = "${zoneRoot}\\images\\${imageFolderName}"
         opts.targetImageFolder = tgtFolder
         def cachePath = opts.cachePath
         def command = "mkdir \"${tgtFolder}\""
         log.debug("command: ${command}")
-        def dirResults = morpheusContext.executeCommand(command, opts)
+        def dirResults = executeCommand(command, opts)
 
-        if(metadataFile) {
-            // TODO: move getCloudFileStreamUrl to service class - replace with context.async.virtualImage.getCloudFileStreamUrl
-            def tgtUrl //= VirtualImageService.getCloudFileStreamUrl(opts.image.virtualImageId as Long, metadataFile,opts.userId as Long,opts.zone as ComputeZone)
-            tgtUrl = tgtUrl.replace("https","http")
+        if (metadataFile) {
+            //def tgtUrl = VirtualImageService.getCloudFileStreamUrl(opts.image.virtualImageId as Long, metadataFile,opts.userId as Long,opts.zone as ComputeZone)
+            // TODO: use morpheusContext.services.virtualImage.getCloudFileStreamUrl while implementing this method
+            def tgtUrl
+            //= morpheusContext.services.virtualImage.getCloudFileStreamUrl(virtualImage, cloudFile, createdBy, cloud)
+            tgtUrl = tgtUrl.replace("https", "http")
             log.debug("metadata url: ${tgtUrl}")
-            fileList << [inline:true, action:'download', content:tgtUrl.bytes.encodeAsBase64(),
-                         targetPath:"${tgtFolder}\\metadata.json".toString()]
+            fileList << [inline    : true, action: 'download', content: tgtUrl.bytes.encodeAsBase64(),
+                         targetPath: "${tgtFolder}\\metadata.json".toString()]
         }
         vhdFiles.each { vhdFile ->
-            def tgtFilename = extractImageFileName(vhdFile.name) // check: extractImageFileName ???
-            // TODO: move getCloudFileStreamUrl to service class - replace with context.async.virtualImage.getCloudFileStreamUrl
-            def tgtUrl //= VirtualImageService.getCloudFileStreamUrl(opts.image.virtualImageId as Long, vhdFile,opts.userId as Long,opts.zone as ComputeZone)
+            def tgtFilename = extractImageFileName(vhdFile.name)
+            //def tgtUrl = VirtualImageService.getCloudFileStreamUrl(opts.image.virtualImageId as Long, vhdFile,opts.userId as Long,opts.zone as ComputeZone)
+            // TODO: use morpheusContext.services.virtualImage.getCloudFileStreamUrl while implementing this method
+            def tgtUrl //= morpheusContext.services.virtualImage.getCloudFileStreamUrl(virtualImage, cloudFile, createdBy, cloud)
             log.info("vhd url: ${tgtUrl}")
-            fileList << [inline:true, action:'download', content:tgtUrl.bytes.encodeAsBase64(),
-                         targetPath:"${tgtFolder}\\${tgtFilename}".toString()]
+            fileList << [inline    : true, action: 'download', content: tgtUrl.bytes.encodeAsBase64(),
+                         targetPath: "${tgtFolder}\\${tgtFilename}".toString()]
         }
         fileList.each { fileAction ->
-            def filePromise = opts.commandService.sendAction(opts.hypervisor, fileAction, [timeout:1800000l])
+            def filePromise = opts.commandService.sendAction(opts.hypervisor, fileAction, [timeout: 1800000l])
             def fileResults = filePromise.get(1000l * 60l * 15l)
             rtn.success = fileResults?.success == true
         }
@@ -94,9 +105,9 @@ class HypervComputeUtility {
         return rtn
     }
 
-    static cloneImage(opts, srcImage, tgtName) {
+    def cloneImage(opts, srcImage, tgtName) {
         log.info("cloneImage: ${srcImage} -> ${tgtName}")
-        def rtn = [success:false]
+        def rtn = [success: false]
         try {
             def diskRoot = opts.diskRoot
             def imageFolderName = opts.serverFolder
@@ -107,24 +118,24 @@ class HypervComputeUtility {
             log.debug("cloneImage command: ${command}")
             out = executeCommand(command, opts)
             log.info("cloneImage: ${out}")
-            if(out.success == true) {
+            if (out.success == true) {
                 command = "dir \"${tgtFolder}\""
                 out = executeCommand(command, opts)
                 rtn.targetPath = tgtFolder
                 rtn.success = out.success
             }
-        } catch(e) {
+        } catch (e) {
             log.error("cloneImage error: ${e}", e)
         }
         return rtn
     }
 
-    static listImages(opts) {
+    def listImages(opts) {
 
     }
 
-    static findImage(opts, imageName) {
-        def rtn = [success:false, imageExists:false]
+    def findImage(opts, imageName) {
+        def rtn = [success: false, imageExists: false]
         def zoneRoot = opts.zoneRoot ?: defaultRoot
         def imageFolder = formatImageFolder(imageName)
         def imageFolderPath = "${zoneRoot}\\images\\${imageFolder}"
@@ -133,39 +144,39 @@ class HypervComputeUtility {
         def out = executeCommand(command, opts)
         log.info("findImage: ${out.data}")
         rtn.success = out.success
-        if(out.data?.length() > 0) {
+        if (out.data?.length() > 0) {
             rtn.imageExists = true
             rtn.imageName = imageName
         }
         return rtn
     }
 
-    static createDisk(opts, diskPath, diskSize) {
+    def createDisk(opts, diskPath, diskSize) {
         def command = "New-VHD -Path \"${diskPath}\" -SizeBytes ${diskSize} -Dynamic"
         log.debug "createDisk command: ${command}"
         return executeCommand(command, opts)
     }
 
-    static attachDisk(opts, vmId, diskPath) {
+    def attachDisk(opts, vmId, diskPath) {
         def command = "Add-VMHardDiskDrive -VMName \"${vmId}\" -Path \"${diskPath}\""
         log.debug "attachDisk command: ${command}"
         return executeCommand(command, opts)
     }
 
-    static resizeDisk(opts, diskPath, diskSize) {
+    def resizeDisk(opts, diskPath, diskSize) {
         def command = "Resize-VHD -Path \"${diskPath}\" -SizeBytes ${diskSize}"
         log.debug "resizeDisk: ${command}"
         return executeCommand(command, opts)
     }
 
-    static detachDisk(opts, vmId, controllerType, controllerNumber, controllerLocation) {
+    def detachDisk(opts, vmId, controllerType, controllerNumber, controllerLocation) {
         def command = "Remove-VMHardDiskDrive -VMName \"${vmId}\" -ControllerType \"${controllerType}\" -ControllerNumber \"${controllerNumber}\" -ControllerLocation \"${controllerLocation}\""
         log.debug "detachDisk: ${command}"
         return executeCommand(command, opts)
     }
 
-    static deleteDisk(opts, diskName) {
-        def rtn = [success:false]
+    def deleteDisk(opts, diskName) {
+        def rtn = [success: false]
         try {
             def diskRoot = opts.diskRoot
             def vmFolder = opts.serverFolder
@@ -175,59 +186,59 @@ class HypervComputeUtility {
             def out = executeCommand(command, opts)
             log.debug "deleteDisk: ${out}"
             rtn.success = out.success && out.exitValue == 0
-        } catch(e) {
+        } catch (e) {
             log.error("deleteDisk error: ${e}", e)
         }
         return rtn
     }
 
-    static validateServerConfig(Map opts=[:]) {
+    def validateServerConfig(Map opts = [:]) {
         log.debug("validateServerConfig: ${opts}")
-        def rtn = [success:false, errors:[]]
+        def rtn = [success: false, errors: []]
         try {
             //def zone = ComputeZone.read(opts.zoneId)
             // if(!opts.networkId)
             // 	rtn.errors += [field: 'networkId', msg: 'You must choose a network']
-            if(opts.networkInterfaces?.size() > 0) {
+            if (opts.networkInterfaces?.size() > 0) {
                 def hasNetwork = true
                 opts.networkInterfaces?.each {
-                    if(!it.network.group && (it.network.id == null || it.network.id == '')) {
+                    if (!it.network.group && (it.network.id == null || it.network.id == '')) {
                         hasNetwork = false
                     }
                 }
-                if(hasNetwork != true) {
-                    rtn.errors += [field:'networkInterface', msg:'You must choose a network for each interface']
+                if (hasNetwork != true) {
+                    rtn.errors += [field: 'networkInterface', msg: 'You must choose a network for each interface']
                 }
             } else {
-                rtn.errors += [field:'networkInterface', msg:'You must choose a network']
+                rtn.errors += [field: 'networkInterface', msg: 'You must choose a network']
             }
-            if(opts.containsKey('hostId') && !opts.hostId) {
+            if (opts.containsKey('hostId') && !opts.hostId) {
                 rtn.errors += [field: 'hostId', msg: 'You must choose a host']
                 rtn.errors += [field: 'hypervHostId', msg: 'You must choose a host']
             }
-            if(opts.containsKey('nodeCount') && !opts.nodeCount) {
+            if (opts.containsKey('nodeCount') && !opts.nodeCount) {
                 rtn.errors += [field: 'nodeCount', msg: 'Cannot be blank']
                 rtn.errors += [field: 'config.nodeCount', msg: 'Cannot be blank']
             }
             rtn.success = (rtn.errors.size() == 0)
             log.debug "validateServer results: ${rtn}"
-        } catch(e)  {
+        } catch (e) {
             log.error "error in validateServerConfig: ${e}", e
         }
         return rtn
     }
 
-    static updateServer(opts, vmId, updates = [:]) {
+    def updateServer(opts, vmId, updates = [:]) {
         log.info("updateServer: vmId: ${vmId}, updates: ${updates}")
-        def rtn = [success:false]
+        def rtn = [success: false]
         try {
-            if(updates.maxMemory || updates.maxCores || updates.notes) {
+            if (updates.maxMemory || updates.maxCores || updates.notes) {
                 def command = "Set-VM -Name \"${vmId}\""
-                if(updates.maxCores)
+                if (updates.maxCores)
                     command += " -ProcessorCount ${updates.maxCores}"
-                if(updates.maxMemory)
+                if (updates.maxMemory)
                     command += " -MemoryStartupBytes ${updates.maxMemory}"
-                if(updates.notes) {
+                if (updates.notes) {
                     command += " -Notes ${updates.notes}"
                 }
 
@@ -239,51 +250,52 @@ class HypervComputeUtility {
                 log.info("No updates for server: ${vmId}")
                 rtn.success = true
             }
-        } catch(e)  {
+        } catch (e) {
             log.error "updateServer error: ${e}", e
         }
         return rtn
     }
 
-    static cloneServer(opts) {
+    def cloneServer(opts) {
         log.debug "cloneServer opts: ${opts}"
-        def rtn = [success:false]
+        def rtn = [success: false]
         try {
             def imageName = opts.imageId
             def cloneResults = cloneImage(opts, imageName, opts.serverFolder)
             log.info "cloneResults: ${cloneResults}"
-            if(cloneResults.success == true) {
-                def disks = [osDisk:[:], dataDisks:[]]
+            if (cloneResults.success == true) {
+                def disks = [osDisk: [:], dataDisks: []]
                 def diskRoot = opts.diskRoot
                 def vmRoot = opts.vmRoot
                 def imageFolderName = opts.serverFolder
                 def networkName = opts.network?.name
                 def diskFolder = "${diskRoot}\\${imageFolderName}"
                 def bootDiskName = opts.diskMap?.bootDisk?.fileName ?: 'ubuntu-14_04.vhd'
-                disks.osDisk = [externalId:bootDiskName]
+                disks.osDisk = [externalId: bootDiskName]
                 def osDiskPath = diskFolder + '\\' + bootDiskName
                 def vmFolder = "${vmRoot}\\${imageFolderName}"
                 //network config
                 def additionalNetworks = []
-                if(opts.networkConfig?.primaryInterface?.network?.externalId) { //new style multi network
+                if (opts.networkConfig?.primaryInterface?.network?.externalId) { //new style multi network
                     def primaryInterface = opts.networkConfig.primaryInterface
                     networkName = primaryInterface.network.externalId
                     //additional nics
                     def extraIndex = 1
                     opts.networkConfig.extraInterfaces?.each { extraInterface ->
                         log.debug("Provisioning extra interface ${extraInterface}")
-                        if(extraInterface.network?.externalId) {
+                        if (extraInterface.network?.externalId) {
                             additionalNetworks << [switchName: extraInterface.network.externalId, name: "${opts.name} NIC${extraIndex}", vlanId: extraInterface.network.vlanId]
                             extraIndex++
                         }
                     }
                 }
                 Integer generation = 1
-                if(osDiskPath.endsWith('.vhdx')) {
+                if (osDiskPath.endsWith('.vhdx')) {
                     generation = 2
                 }
                 def launchCommand = "New-VM -Name \"${opts.name}\" -MemoryStartupBytes ${opts.memory} -Generation ${generation} -VHDPath \"${osDiskPath}\" " +
-                        "-BootDevice VHD -Path \"${vmFolder}\" -SwitchName \"${networkName}\" " //-ComputerName ${opts.name}
+                        "-BootDevice VHD -Path \"${vmFolder}\" -SwitchName \"${networkName}\" "
+                //-ComputerName ${opts.name}
                 //Parameter Set: Existing VHD
                 //New-VM [[-Name] <String> ] [[-MemoryStartupBytes] <Int64> ] [[-Generation] <Int16> ] -VHDPath <String> [-AsJob]
                 //[-BootDevice <BootDevice> {CD | Floppy | LegacyNetworkAdapter | IDE | NetworkAdapter | VHD} ] [-ComputerName <String[]> ]
@@ -294,78 +306,77 @@ class HypervComputeUtility {
 
 
                 log.debug("run server: ${out}")
-                if(out.success == true) {
+                if (out.success == true) {
                     //we need to fix SecureBoot
                     String secureBootCommand
-                    if(opts.secureBoot) {
+                    if (opts.secureBoot) {
                         secureBootCommand = "Set-VMFirmware \"${opts.name}\" -EnableSecureBoot On"
                     } else {
                         secureBootCommand = "Set-VMFirmware \"${opts.name}\" -EnableSecureBoot Off"
                     }
                     executeCommand(secureBootCommand, opts)
                     //if we have to tag it to a VLAN
-                    if(opts.networkConfig.primaryInterface.network.vlanId) {
+                    if (opts.networkConfig.primaryInterface.network.vlanId) {
                         String setVlanCommand = "Set-VMNetworkAdapterVlan -VMName \"${opts.name}\" -Access -VlanId ${opts.networkConfig.primaryInterface.network.vlanId}"
                         executeCommand(setVlanCommand, opts)
                     }
                     //add additional NICS
-                    if(additionalNetworks) {
-                        additionalNetworks.each{additionalNetwork ->
+                    if (additionalNetworks) {
+                        additionalNetworks.each { additionalNetwork ->
                             def addNetworkCommand = "Add-VMNetworkAdapter -VMName \"${opts.name}\" -Name \"${additionalNetwork.name}\" -SwitchName \"${additionalNetwork.switchName}\""
                             executeCommand(addNetworkCommand, opts)
-                            if(additionalNetwork.vlanId) {
+                            if (additionalNetwork.vlanId) {
                                 String setVlanCommand = "Set-VMNetworkAdapterVlan -VMName \"${opts.name}\" -VMNetworkAdapterName \"${additionalNetwork.name}\" -Access -VlanId ${additionalNetwork.vlanId}"
                                 executeCommand(setVlanCommand, opts)
                             }
                         }
                     }
                     //resize disk
-                    if(opts.osDiskSize)
+                    if (opts.osDiskSize)
                         resizeDisk(opts, osDiskPath, opts.osDiskSize)
                     //add disk
-                    if(opts.dataDisks?.size() > 0) {
+                    if (opts.dataDisks?.size() > 0) {
                         opts.dataDisks?.eachWithIndex { disk, index ->
                             def diskIndex = "${index + 1}"
                             def dataDisk = "dataDisk${diskIndex}.vhd"
-                            if(generation == 2) {
+                            if (generation == 2) {
                                 dataDisk = "dataDisk${diskIndex}.vhdx"
                             }
 
                             def newDiskPath = "${diskFolder}\\${dataDisk}"
                             //if this is a clone/restore we have already copied the disk, otherwise need to create it
-                            if(!opts.snapshotId) {
+                            if (!opts.snapshotId) {
                                 createDisk(opts, newDiskPath, disk.maxStorage)
                             }
                             attachDisk(opts, opts.name, newDiskPath)
                             disk.externalId = dataDisk
                             disks.dataDisks << disk
                         }
-                    } else if(opts.dataDiskSize) {
-                        disks << [dataDisks:[]]
+                    } else if (opts.dataDiskSize) {
+                        disks << [dataDisks: []]
                         def dataDisk = "dataDisk1.vhd"
                         def newDiskPath = "${diskFolder}\\${dataDisk}"
                         //if this is a clone/restore we have already copied the disk, otherwise need to create it
-                        if(!opts.snapshotId) {
+                        if (!opts.snapshotId) {
                             createDisk(opts, newDiskPath, opts.dataDiskSize)
                         }
                         attachDisk(opts, opts.name, newDiskPath)
                     }
                     //cpu
-                    if(opts.maxCores && opts.maxCores > 0) {
-                        updateServer(opts, opts.name, [maxCores:opts.maxCores])
+                    if (opts.maxCores && opts.maxCores > 0) {
+                        updateServer(opts, opts.name, [maxCores: opts.maxCores])
                     }
                     enableDynamicMemory(opts)
 
                     //need to add non boot disks from the diskMap - TODO
                     //cloud init
-                    if(opts.cloudConfigBytes) {
-                        def isoAction = [inline:true, action:'rawfile', content:opts.cloudConfigBytes.encodeAsBase64(), targetPath:"${diskFolder}\\config.iso".toString(), opts:[:]]
+                    if (opts.cloudConfigBytes) {
+                        def isoAction = [inline: true, action: 'rawfile', content: opts.cloudConfigBytes.encodeAsBase64(), targetPath: "${diskFolder}\\config.iso".toString(), opts: [:]]
                         def isoPromise = opts.commandService.sendAction(opts.hypervisor, isoAction)
                         def isoResults = isoPromise.get(1000l * 60l * 3l)
-                        if(generation == 2) {
+                        if (generation == 2) {
                             createCdrom(opts, opts.name, "${diskFolder}\\config.iso")
-                        }
-                        else {
+                        } else {
                             setCdrom(opts, opts.name, "${diskFolder}\\config.iso")
                         }
                     }
@@ -376,45 +387,45 @@ class HypervComputeUtility {
                     //get details
                     log.info("Hyperv Check for Server Ready ${opts.name}")
                     def serverDetail = checkServerReady(opts, opts.name)
-                    if(serverDetail.success == true) {
+                    if (serverDetail.success == true) {
                         // write ip address to notes here
                         updateServer(opts, opts.name, [notes: serverDetail.server?.ipAddress])
-                        rtn.server = [name:opts.name, serverFolder:vmFolder, id:opts.name, ipAddress:serverDetail.server?.ipAddress, disks:disks, externalId: opts.name, vmId: serverDetail.server?.vmId]
+                        rtn.server = [name: opts.name, serverFolder: vmFolder, id: opts.name, ipAddress: serverDetail.server?.ipAddress, disks: disks, externalId: opts.name, vmId: serverDetail.server?.vmId]
                         rtn.success = true
                     } else {
-                        rtn.server = [name:opts.name, serverFolder:vmFolder, id:opts.name, ipAddress:serverDetail.server?.ipAddress, disks:disks]
+                        rtn.server = [name: opts.name, serverFolder: vmFolder, id: opts.name, ipAddress: serverDetail.server?.ipAddress, disks: disks]
                     }
                 }
             }
-        } catch(e) {
+        } catch (e) {
             log.error("cloneServer error: ${e}", e)
         }
         return rtn
     }
 
-    static createCdrom(opts, vmName, cdPath) {
+    def createCdrom(opts, vmName, cdPath) {
         def command = "Add-VMDvdDrive -VMName \"${vmName}\" –Path \"${cdPath}\""
         return executeCommand(command, opts)
     }
 
-    static setCdrom(opts, vmName, cdPath) {
+    def setCdrom(opts, vmName, cdPath) {
         def command = "Set-VMDvdDrive -VMName \"${vmName}\" –Path \"${cdPath}\""
         return executeCommand(command, opts)
     }
 
-    static removeCdrom(opts) {
+    def removeCdrom(opts) {
         //ide1:0.devicetype = "cdrom-raw"
         //ide1:0.filename = "auto detect"
         //ide1:0.present = “FALSE”
     }
 
-    static getHypervHost(opts) {
-        def rtn = [success:false]
+    def getHypervHost(opts) {
+        def rtn = [success: false]
         def command = "Get-VMHost | Format-List"
         log.debug("getHypervHost command: ${command}")
         def results = executeCommand(command, opts)
         log.debug("getHypervHost: ${results}")
-        if(results.success == true && results.exitValue == 0) {
+        if (results.success == true && results.exitValue == 0) {
             rtn.host = parseHypervListData(results.data)
             rtn.success = true
         }
@@ -422,8 +433,8 @@ class HypervComputeUtility {
         return rtn
     }
 
-    static getHypervServerInfo(opts) {
-        def rtn = [success:false]
+    def getHypervServerInfo(opts) {
+        def rtn = [success: false]
         def command = 'hostname'
         def out = executeCommand(command, opts)
         log.debug("out: ${out.data}")
@@ -440,19 +451,19 @@ class HypervComputeUtility {
         return rtn
     }
 
-    static getServerDisks(opts, vmId) {
-        def rtn = [success:false]
+    def getServerDisks(opts, vmId) {
+        def rtn = [success: false]
         def diskData = []
         def command = "Get-VMHardDiskDrive -VMName \"${vmId}\" | Format-List ControllerType, ControllerNumber, ControllerLocation, Id, Path"
         log.debug("getServerDisks command: ${command}")
         def results = executeCommand(command, opts)
         log.debug("getServerDisks: ${results}")
-        if(results.success == true && results.exitValue == 0) {
+        if (results.success == true && results.exitValue == 0) {
             def diskResults = results.data?.split("\n")
             diskResults.each { diskResult ->
-                if(diskResult.length() > 0){
+                if (diskResult.length() > 0) {
                     def diskInfo = parseDiskDetails(diskResult)
-                    if(diskInfo?.success) diskData << diskInfo?.disk
+                    if (diskInfo?.success) diskData << diskInfo?.disk
                 }
             }
             rtn.disks = diskData
@@ -462,13 +473,13 @@ class HypervComputeUtility {
         return rtn
     }
 
-    static getHypervMemory(opts) {
+    def getHypervMemory(opts) {
 
     }
 
-    static listVmSwitches(opts) {
+    def listVmSwitches(opts) {
         log.debug "listVmSwitches opts: ${opts}"
-        def rtn = [success:false, bridgeList:[]]
+        def rtn = [success: false, bridgeList: []]
         def command = 'Get-VMSwitch | Format-Table'
         def results = executeCommand(command, opts)
         log.debug("results: ${results}")
@@ -478,23 +489,23 @@ class HypervComputeUtility {
         return rtn
     }
 
-    static checkServerReady(opts, vmId) {
-        def rtn = [success:false]
+    def checkServerReady(opts, vmId) {
+        def rtn = [success: false]
         try {
             def pending = true
             def attempts = 0
-            while(pending) {
+            while (pending) {
                 sleep(1000l * 5l)
                 def serverDetail = getServerDetails(opts, vmId)
-                if(serverDetail.success == true) {
-                    if(serverDetail.server.ipAddress) {
+                if (serverDetail.success == true) {
+                    if (serverDetail.server.ipAddress) {
                         rtn.success = true
                         rtn.server = serverDetail.server
                         pending = false
                     } else {
                         opts.server.refresh()
                         log.debug("check server loading server: ip: ${opts.server.internalIp}")
-                        if(opts.server.internalIp) {
+                        if (opts.server.internalIp) {
                             rtn.success = true
                             rtn.server = serverDetail.server
                             rtn.server.ipAddress = opts.server.internalIp
@@ -502,27 +513,27 @@ class HypervComputeUtility {
                         }
                     }
                 }
-                attempts ++
-                if(attempts > 100)
+                attempts++
+                if (attempts > 100)
                     pending = false
             }
-        } catch(e) {
-            log.error("An Exception Has Occurred",e)
+        } catch (e) {
+            log.error("An Exception Has Occurred", e)
         }
         return rtn
     }
 
-    static getServerDetails(opts, vmId) {
-        def rtn = [success:false]
+    def getServerDetails(opts, vmId) {
+        def rtn = [success: false]
         try {
             def command = "Get-VM -Name \"${vmId}\" | Format-List VMname, VMID, Status, Uptime, State, CpuUsage, MemoryAssigned, ComputerName"
             def results = executeCommand(command, opts)
-            if(results.success == true && results.exitValue == 0) {
+            if (results.success == true && results.exitValue == 0) {
                 def vmData = parseVmDetails(results.data)
-                if(vmData.success == true) {
+                if (vmData.success == true) {
                     command = "Get-VMNetworkAdapter -VMName \"${vmId}\" | Format-List"
                     results = executeCommand(command, opts)
-                    if(results.success == true && results.exitValue == 0) {
+                    if (results.success == true && results.exitValue == 0) {
                         log.debug("network data: ${results.data}")
                         def vmNetworkData = parseVmNetworkDetails(results.data)
                         //parse it
@@ -532,15 +543,15 @@ class HypervComputeUtility {
                 }
             }
 
-        } catch(e){
-            log.error("An Exception Has Occurred for getServerDetails: ${e.message}",e)
+        } catch (e) {
+            log.error("An Exception Has Occurred for getServerDetails: ${e.message}", e)
         }
         log.debug("getServerDetails: ${rtn}")
         return rtn
     }
 
-    static listVirtualMachines(opts) {
-        def rtn = [success:false, virtualMachines: []]
+    def listVirtualMachines(opts) {
+        def rtn = [success: false, virtualMachines: []]
 
 
         def hasMore = true
@@ -609,7 +620,7 @@ class HypervComputeUtility {
             log.debug("out: ${out.data}")
             if (out.success) {
                 hasMore = out.data != ''
-                if(out.data) {
+                if (out.data) {
                     rtn.virtualMachines += out.data
                 }
                 rtn.success = true
@@ -619,7 +630,7 @@ class HypervComputeUtility {
         }
 
         def currentOffset = 0
-        while(hasMore) {
+        while (hasMore) {
             fetch(currentOffset)
             currentOffset += pageSize
         }
@@ -628,15 +639,15 @@ class HypervComputeUtility {
     }
 
 
-    static generateCommandString(command) {
+    def generateCommandString(command) {
         // FormatEnumeration causes lists to show ALL items
         // width value prevents wrapping
         "\$FormatEnumerationLimit =-1; ${command} | ConvertTo-Json -Depth 3"
     }
 
-    static wrapExecuteCommand(String command, Map opts = [:]) {
+    def wrapExecuteCommand(String command, Map opts = [:]) {
         def out = executeCommand(command, opts)
-        if(out.data) {
+        if (out.data) {
             def payload = out.data
             if (!out.data.startsWith('[')) {
                 payload = "[${out.data}]"
@@ -652,21 +663,21 @@ class HypervComputeUtility {
         out
     }
 
-    static removeServer(opts, vmId) {
-        def rtn = [success:false]
+    def removeServer(opts, vmId) {
+        def rtn = [success: false]
         try {
             def command = "Remove-VM –Name \"${vmId}\" -Force"
             def out = executeCommand(command, opts)
             rtn.success = out.success && out.exitValue == 0
             println("remove server: ${out}")
-        } catch(e) {
+        } catch (e) {
             log.error("removeServer error: ${e}", e)
         }
         return rtn
     }
 
-    static deleteServer(opts) {
-        def rtn = [success:false]
+    def deleteServer(opts) {
+        def rtn = [success: false]
         try {
             def zoneRoot = opts.zoneRoot ?: defaultRoot
             def diskRoot = opts.diskRoot
@@ -679,77 +690,77 @@ class HypervComputeUtility {
             def out = wrapExecuteCommand(generateCommandString(command), opts)
             println("delete server: ${out}")
             rtn.success = true
-        } catch(e) {
+        } catch (e) {
             log.error("deleteServer error: ${e}", e)
         }
         return rtn
     }
 
-    static stopServer(opts, vmId) {
-        def rtn = [success:false]
+    def stopServer(opts, vmId) {
+        def rtn = [success: false]
         try {
-            def command = "Stop-VM -Name \"${vmId}\" -Force${opts.turnOff ? ' -TurnOff' :''}"
+            def command = "Stop-VM -Name \"${vmId}\" -Force${opts.turnOff ? ' -TurnOff' : ''}"
             def out = executeCommand(command, opts)
             rtn.success = out.success && out.exitValue == 0
             println("stop server: ${out}")
-        } catch(e) {
+        } catch (e) {
             log.error("startServer error: ${e}", e)
         }
         return rtn
     }
 
-    static startServer(opts, vmId) {
-        def rtn = [success:false]
+    def startServer(opts, vmId) {
+        def rtn = [success: false]
         try {
             def command = "Start-VM -Name \"${vmId}\""
             def out = executeCommand(command, opts)
             rtn.success = out.success
-        } catch(e) {
+        } catch (e) {
             log.error("startServer error: ${e}", e)
         }
         return rtn
     }
 
-    static pauseServer(opts, vmId) {
-        def rtn = [success:false]
+    def pauseServer(opts, vmId) {
+        def rtn = [success: false]
         try {
             def command = "/Applications/VMware\\ Fusion.app/Contents/Library/vmrun -T fusion pause ${vmId}"
             def out = executeCommand(command, opts)
             rtn.success = out.success
-        } catch(e) {
+        } catch (e) {
             log.error("startServer error: ${e}", e)
         }
         return rtn
     }
 
-    static resumeServer(opts, vmId) {
-        def rtn = [success:false]
+    def resumeServer(opts, vmId) {
+        def rtn = [success: false]
         try {
             def command = "/Applications/VMware\\ Fusion.app/Contents/Library/vmrun -T fusion unpause ${vmId}"
             def out = executeCommand(command, opts)
             rtn.success = out.success
-        } catch(e) {
+        } catch (e) {
             log.error("startServer error: ${e}", e)
         }
         return rtn
     }
 
-    static restoreServer(opts, vmId, snapshotId) {
-        def rtn = [success:false]
+    def restoreServer(opts, vmId, snapshotId) {
+        def rtn = [success: false]
         try {
             def command = "Restore-VMSnapshot -Name \"${snapshotId}\" -VMName \"${vmId}\" -Confirm:\$false"
             def out = executeCommand(command, opts)
             rtn.success = out.success && out.exitValue == 0
             log.debug("restore server: ${out}")
-        } catch(e) {
+        } catch (e) {
             log.error("restoreServer error: ${e}")
         }
 
         return rtn
     }
 
-    static snapshotServer(opts, vmId) {
-        def rtn = [success:false]
+    def snapshotServer(opts, vmId) {
+        def rtn = [success: false]
         try {
             def snapshotId = opts.snapshotId ?: "${vmId}.${System.currentTimeMillis()}"
             def command = "Checkpoint-VM -Name \"${vmId}\" -SnapshotName \"${snapshotId}\""
@@ -757,49 +768,49 @@ class HypervComputeUtility {
             rtn.success = out.success && out.exitValue == 0
             rtn.snapshotId = snapshotId
             log.debug("snapshot server: ${out}")
-        } catch(e) {
+        } catch (e) {
             log.error("snapshotServer error: ${e}")
         }
 
         return rtn
     }
 
-    static deleteSnapshot(opts, vmId, snapshotId) {
-        def rtn = [success:false]
+    def deleteSnapshot(opts, vmId, snapshotId) {
+        def rtn = [success: false]
         try {
             def command = "Remove-VMSnapshot -VMName \"${vmId}\" -Name \"${snapshotId}\""
             def out = executeCommand(command, opts)
             rtn.success = out.success && out.exitValue == 0
-            if(!rtn.success) {
-                if(out.errorOutput?.contains("Hyper-V was unable to find a virtual machine with")){
+            if (!rtn.success) {
+                if (out.errorOutput?.contains("Hyper-V was unable to find a virtual machine with")) {
                     // Don't fail if the Snapshot isn't there
                     rtn.success = true
                 }
             }
             rtn.snapshotId = snapshotId
             log.debug("delete snapshot: ${out}")
-        } catch(e) {
+        } catch (e) {
             log.error("deleteSnapshot error: ${e}")
         }
 
         return rtn
     }
 
-    static listSnapshots(opts, vmId) {
-        def rtn = [success:false]
+    def listSnapshots(opts, vmId) {
+        def rtn = [success: false]
         try {
             def command = "Get-VMSnapshot -VMName \"${vmId}\" | Format-Table"
             def out = executeCommand(command, opts)
             rtn.success = out.success && out.exitValue == 0
             log.debug("list snapshots: ${out}")
-        } catch(e) {
+        } catch (e) {
             log.error("listSnapshots error: ${e}")
         }
     }
 
-    static exportSnapshot(opts, vmId, snapshotId) {
+    def exportSnapshot(opts, vmId, snapshotId) {
         log.debug("export snapshot vmId: ${vmId}, snapshotId: ${snapshotId}")
-        def rtn = [success:false]
+        def rtn = [success: false]
         try {
             def zoneRoot = opts.zoneRoot ?: defaultRoot
             def snapshotFolder = formatImageFolder(snapshotId)
@@ -810,19 +821,19 @@ class HypervComputeUtility {
             out = executeCommand(command, opts)
             rtn.success = out.success && out.exitValue == 0
             log.debug("export snapshot: ${out}")
-            if(rtn.success){
+            if (rtn.success) {
                 rtn.diskPath = "${tgtFolder}\\${vmId}\\Virtual Hard Disks"
                 rtn.vmPath = "${tgtFolder}\\${vmId}\\Virtual Machines"
             }
-        } catch(e) {
+        } catch (e) {
             log.error("exportSnapshot error: ${e}")
         }
 
         return rtn
     }
 
-    static exportVm(opts, vmId) {
-        def rtn = [success:false]
+    def exportVm(opts, vmId) {
+        def rtn = [success: false]
         try {
             def zoneRoot = opts.zoneRoot ?: defaultRoot
             def vmFolder = formatImageFolder(vmId)
@@ -833,15 +844,15 @@ class HypervComputeUtility {
             out = executeCommand(command, opts)
             rtn.success = out.success && out.exitValue == 0
             log.debug("export vm: ${out}")
-        } catch(e) {
+        } catch (e) {
             log.error("exportVm error: ${e}")
         }
 
         return rtn
     }
 
-    static deleteExport(opts, snapshotId) {
-        def rtn = [success:false]
+    def deleteExport(opts, snapshotId) {
+        def rtn = [success: false]
         try {
             def zoneRoot = opts.zoneRoot ?: defaultRoot
             def exportFolder = formatImageFolder(snapshotId)
@@ -850,7 +861,7 @@ class HypervComputeUtility {
             def out = executeCommand(command, opts)
             log.debug("delete export: ${out}")
             rtn.success = out.success && out.exitValue == 0
-        } catch(e) {
+        } catch (e) {
             log.error("deleteExport error: ${e}")
         }
 
@@ -858,8 +869,8 @@ class HypervComputeUtility {
     }
 
     //create a new VM from an existing VM or snapshot export
-    static importVm(opts, sourceVmId, snapshotId=null) {
-        def rtn = [success:false]
+    def importVm(opts, sourceVmId, snapshotId = null) {
+        def rtn = [success: false]
         try {
             def diskRoot = opts.diskRoot
             def vmRoot = opts.vmRoot
@@ -874,43 +885,43 @@ class HypervComputeUtility {
             //get the vm config xml file from the export directory
             def command = "(dir \"${sourceFolder}\" -filter *.xml).FullName"
             def out = executeCommand(command, opts)
-            if(out.success && out.data?.length() > 0) {
+            if (out.success && out.data?.length() > 0) {
                 def vmConfigPath = out.data?.trim()
                 command = "Import-VM -Path \"${vmConfigPath}\" -Copy -GenerateNewId -VirtualMachinePath \"${vmFolder}\" -VhdDestinationPath \"${diskFolder}\""
                 out = executeCommand(command, opts)
                 rtn.success = out.success && out.exitValue == 0
                 log.debug("import vm: ${out}")
             }
-        } catch(e) {
+        } catch (e) {
             log.error("importVm error: ${e}")
         }
 
         return rtn
     }
 
-    static parseVmSwitchList(data) {
+    def parseVmSwitchList(data) {
         def rtn = []
         def lines = data?.tokenize('\n')
-        lines = lines?.findAll{it.length() > 1}
+        lines = lines?.findAll { it.length() > 1 }
         log.debug("lines: ${lines}")
-        if(lines?.size() > 1) {
+        if (lines?.size() > 1) {
             def headerMap = parseHypervHeader(lines[1])
-            if(headerMap?.count > 2) {
+            if (headerMap?.count > 2) {
                 lines.eachWithIndex { line, index ->
-                    if(index > 1) {
+                    if (index > 1) {
                         line = line.trim()
                         def values = []
                         headerMap.columns?.each { col ->
                             def value = ''
-                            if(line.length() > col.start) {
-                                if(col.end > 0 && col.end < line.length())
+                            if (line.length() > col.start) {
+                                if (col.end > 0 && col.end < line.length())
                                     value = line.substring(col.start, col.end).trim()
                                 else
                                     value = line.substring(col.start).trim()
                             }
                             values << value
                         }
-                        def vmSwitch = [name:values[0], type:values[1], interface:values[2]]
+                        def vmSwitch = [name: values[0], type: values[1], interface: values[2]]
                         rtn << vmSwitch
                     }
                 }
@@ -920,14 +931,14 @@ class HypervComputeUtility {
         return rtn
     }
 
-    static parseVmNetworkDetails(data) {
+    def parseVmNetworkDetails(data) {
         //Get-VMNetworkAdapter -VMName bw-hyperv-node-2
         //Name            IsManagementOs VMName           SwitchName MacAddress   Status IPAddresses
         //----            -------------- ------           ---------- ----------   ------ -----------
         //Network Adapter False          bw-hyperv-node-2 wheeler    00155D2D5B15 {Ok}   {}
-        def rtn = [success:false]
+        def rtn = [success: false]
         def vmData = parseHypervListData(data)
-        if(vmData) {
+        if (vmData) {
             rtn.device = vmData.Name
             rtn.managementOs = vmData.IsManagementOs
             rtn.name = vmData.VMName
@@ -936,27 +947,27 @@ class HypervComputeUtility {
             rtn.status = vmData.Status
             rtn.ipAddressList = vmData.IPAddresses
             def ipParse = parseIpAddressList(rtn.ipAddressList)
-            if(ipParse.ipv6address)
+            if (ipParse.ipv6address)
                 rtn.ipv6address = ipParse.ipv6address
-            if(ipParse.ipAddress)
+            if (ipParse.ipAddress)
                 rtn.ipAddress = ipParse.ipAddress
             rtn.success = true
         }
         return rtn
     }
 
-    static parseIpAddressList(data) {
+    def parseIpAddressList(data) {
         def rtn = [:]
-        if(data?.length() > 2) {
+        if (data?.length() > 2) {
             data = data.substring(1, data.length() - 1)
-            if(data?.length() > 0) {
+            if (data?.length() > 0) {
                 def ipList = data.tokenize(',')
                 ipList?.each { ip ->
-                    if(ip.indexOf(':') > -1) {
+                    if (ip.indexOf(':') > -1) {
                         rtn.ipv6address = ip.trim()
-                    } else if(ip.indexOf('.') > -1) {
+                    } else if (ip.indexOf('.') > -1) {
                         def newIp = ip.trim()
-                        if(!newIp.startsWith('169.'))
+                        if (!newIp.startsWith('169.'))
                             rtn.ipAddress = ip.trim()
                     }
                 }
@@ -965,13 +976,13 @@ class HypervComputeUtility {
         return rtn
     }
 
-    static parseVmDetails(data) {
+    def parseVmDetails(data) {
         //Name             State   CPUUsage(%) MemoryAssigned(M) Uptime     Status
         //----             -----   ----------- ----------------- ------     ------
         //bw-hyperv-node-2 Running 0           2048              1.00:51:05 Operating normally
-        def rtn = [success:false]
+        def rtn = [success: false]
         def vmData = parseHypervListData(data)
-        if(vmData) {
+        if (vmData) {
             rtn.name = vmData.Name
             rtn.powerState = vmData.State
             rtn.cpuUsage = vmData.CpuUsage
@@ -985,11 +996,11 @@ class HypervComputeUtility {
         return rtn
     }
 
-    static parseDiskDetails(data) {
-        def rtn = [success:false]
+    def parseDiskDetails(data) {
+        def rtn = [success: false]
         def disk = [:]
         def diskData = parseHypervListFormatData(data)
-        if(diskData) {
+        if (diskData) {
             disk.controllerType = diskData.ControllerType
             disk.controllerNumber = diskData.ControllerNumber
             disk.controllerLocation = diskData.ControllerLocation
@@ -1002,21 +1013,21 @@ class HypervComputeUtility {
         return rtn
     }
 
-    static parseHypervData(data) {
+    def parseHypervData(data) {
         def rtn = []
         def lines = data?.tokenize('\n')
-        lines = lines?.findAll{it.length() > 1}
+        lines = lines?.findAll { it.length() > 1 }
         log.debug("lines: ${lines}")
-        if(lines?.size() > 1) {
+        if (lines?.size() > 1) {
             def headerMap = parseHypervHeader(lines[1])
             lines.eachWithIndex { line, index ->
-                if(index > 1) {
+                if (index > 1) {
                     line = line.trim()
                     def values = []
                     headerMap.columns?.each { col ->
                         def value = ''
-                        if(line.length() > col.start) {
-                            if(col.end > 0 && col.end < line.length())
+                        if (line.length() > col.start) {
+                            if (col.end > 0 && col.end < line.length())
                                 value = line.substring(col.start, col.end).trim()
                             else
                                 value = line.substring(col.start).trim()
@@ -1031,28 +1042,28 @@ class HypervComputeUtility {
         return rtn
     }
 
-    static parseHypervHeader(line) {
-        def rtn = [count:0, columns:[]]
-        if(line?.length() > 0) {
+    def parseHypervHeader(line) {
+        def rtn = [count: 0, columns: []]
+        if (line?.length() > 0) {
             def lastStart = 0
             def lastEnd = 0
             def more = true
-            while(more) {
+            while (more) {
                 def nextSpace = line.indexOf(' ', lastEnd)
-                if(nextSpace > -1) {
+                if (nextSpace > -1) {
                     def nextDash = line.indexOf('-', nextSpace)
-                    if(nextDash > -1) {
+                    if (nextDash > -1) {
                         lastEnd = nextDash
-                        rtn.columns << [start:lastStart, end:lastEnd]
+                        rtn.columns << [start: lastStart, end: lastEnd]
                         lastStart = lastEnd
                     } else {
                         lastEnd = line.length()
-                        rtn.columns << [start:lastStart, end:-1]
+                        rtn.columns << [start: lastStart, end: -1]
                         more = false
                     }
                 } else {
                     lastEnd = line.length()
-                    rtn.columns << [start:lastStart, end:-1]
+                    rtn.columns << [start: lastStart, end: -1]
                     more = false
                 }
             }
@@ -1061,14 +1072,14 @@ class HypervComputeUtility {
         return rtn
     }
 
-    static parseHypervListData(data) {
+    def parseHypervListData(data) {
         def rtn = [:]
         def lines = data?.tokenize('\n')
-        lines = lines?.findAll{it.length() > 1}
+        lines = lines?.findAll { it.length() > 1 }
         log.debug("lines: ${lines}")
-        if(lines?.size() > 1) {
+        if (lines?.size() > 1) {
             lines.eachWithIndex { line, index ->
-                if(line.indexOf(':') > -1) {
+                if (line.indexOf(':') > -1) {
                     def lineTokens = line.tokenize(':')
                     rtn[lineTokens[0].trim()] = lineTokens[1].trim()
                 }
@@ -1078,16 +1089,16 @@ class HypervComputeUtility {
         return rtn
     }
 
-    static parseHypervListFormatData(data) {
+    def parseHypervListFormatData(data) {
         def rtn = [:]
         def lines = data?.tokenize("\n")
-        lines = lines?.findAll{it.length() > 1}
+        lines = lines?.findAll { it.length() > 1 }
         //log.info("lines: ${lines}")
-        if(lines?.size() > 1) {
+        if (lines?.size() > 1) {
             def key
             def val = ""
             lines.eachWithIndex { line, index ->
-                if(line.indexOf(":") > -1) {
+                if (line.indexOf(":") > -1) {
                     def lineTokens = line.split(":", 2)
                     key = lineTokens[0].trim()
                     val = lineTokens[1]?.trim() ?: ""
@@ -1096,7 +1107,7 @@ class HypervComputeUtility {
                     //line was separated by newline in results, append it
                     def lineTokens = [line]
                     val += lineTokens[0].trim()
-                    if(key) rtn[key] = val
+                    if (key) rtn[key] = val
                 }
             }
             log.debug("parseHypervListFormatData: ${rtn}")
@@ -1104,26 +1115,43 @@ class HypervComputeUtility {
         return rtn
     }
 
-    static cleanData(data, ignoreString = null) {
+    def cleanData(data, ignoreString = null) {
         def rtn = ''
         def lines = data?.tokenize('\n')
-        lines = lines?.findAll{it?.trim()?.length() > 1}
-        if(lines?.size() > 0) {
+        lines = lines?.findAll { it?.trim()?.length() > 1 }
+        if (lines?.size() > 0) {
             lines?.each { line ->
                 def trimLine = line.trim()
-                if(rtn == null && ignoreString == null || trimLine != ignoreString)
+                if (rtn == null && ignoreString == null || trimLine != ignoreString)
                     rtn = trimLine
             }
         }
         return rtn
     }
 
-    static void enableDynamicMemory(Map opts){
+    void enableDynamicMemory(Map opts) {
         String stopCommand = "Stop-VM -Name \"${opts.name}\""
         executeCommand(stopCommand, opts)
         String enableDynamic = "Set-VMMemory \"${opts.name}\" -DynamicMemoryEnabled \$True -MinimumBytes 512MB -MaximumBytes ${opts.memory}"
         executeCommand(enableDynamic, opts)
         String startVM = "Start-VM -Name \"${opts.name}\""
         executeCommand(startVM, opts)
+    }
+
+    def extractImageFileName(imageName) {
+        def rtn = imageName
+        def lastIndex = imageName?.lastIndexOf('/')
+        if (lastIndex > -1)
+            rtn = imageName.substring(lastIndex + 1)
+        if (rtn.indexOf('.tar.gz') > -1)
+            rtn = rtn.replaceAll('.tar.gz', '')
+        if (rtn.indexOf('.gz') > -1)
+            rtn = rtn.replaceAll('.gz', '')
+        return rtn
+    }
+
+    def formatImageFolder(imageName) {
+        def rtn = imageName
+        rtn = rtn.replaceAll(' ', '_')
     }
 }
