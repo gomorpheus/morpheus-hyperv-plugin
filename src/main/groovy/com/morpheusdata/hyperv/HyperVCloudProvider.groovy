@@ -20,12 +20,15 @@ import com.morpheusdata.model.StorageControllerType
 import com.morpheusdata.model.StorageVolumeType
 import com.morpheusdata.request.ValidateCloudRequest
 import com.morpheusdata.response.ServiceResponse
+import groovy.util.logging.Slf4j
 
+@Slf4j
 class HyperVCloudProvider implements CloudProvider {
 	public static final String CLOUD_PROVIDER_CODE = 'hyperv'
 
 	protected MorpheusContext context
 	protected Plugin plugin
+	
 
 	public HyperVCloudProvider(Plugin plugin, MorpheusContext ctx) {
 		super()
@@ -153,8 +156,56 @@ class HyperVCloudProvider implements CloudProvider {
 	 * @return ServiceResponse
 	 */
 	@Override
-	ServiceResponse validate(Cloud cloudInfo, ValidateCloudRequest validateCloudRequest) {
+	ServiceResponse validate(Cloud cloud, ValidateCloudRequest validateCloudRequest) {
+		log.info("validateZone: ${cloud}")
+		ServiceResponse response = ServiceResponse.prepare()
+		//def rtn = [success:false, zone:cloud, errors:[:]]
+		try {
+			if(cloud) {
+				def  requiredFields = ['host', 'workingPath', 'vmPath', 'diskPath']
+				def hypervOpts = getHypervZoneOpts(cloud)
+				def zoneConfig = cloud.getConfigMap()
+				rtn.errors = validateRequiredConfigFields(requiredFields, zoneConfig)
+				def credential = credentialService.loadCredentialConfig(opts.credential, zoneConfig)
+				if(!credential.data?.username) {
+					rtn.msg = 'Enter a username'
+					rtn.errors.username = rtn.msg
+				} else if(!credential.data?.password) {
+					rtn.msg = 'Enter your password'
+					rtn.errors.password = rtn.msg
+				}
+				if(rtn.errors.size() == 0) {
+					if(zone.enabled == true) {
+						hypervOpts += [hypervisor:[:], sshHost:zoneConfig.host, sshUsername:credential.data.username,
+									   sshPassword:credential.data.password, zoneRoot:zoneConfig.workingPath, diskRoot:zoneConfig.diskPath, vmRoot:zoneConfig.vmPath]
+						def vmSwitches = HypervComputeUtility.listVmSwitches(hypervOpts)
+						if(vmSwitches.success == true)
+							rtn.success = true
+						if(rtn.success == false)
+							rtn.msg = 'Error connecting to hyper-v'
+					} else {
+						rtn.success = true
+					}
+				} else {
+					rtn.msg = 'Invalid configuration'
+				}
+			} else {
+				rtn.message = 'No zone found'
+			}
+		} catch(e) {
+			log.error("An Exception Has Occurred",e)
+		}
+		return ServiceResponse.create(rtn)
+
+
 		return ServiceResponse.success()
+	}
+
+	def getHypervZoneOpts(zone) {
+		def zoneConfig = zone.getConfigMap()
+		def keyPair = AccountKeyPair.findByAccount(zone.account)
+		return [account:zone.account, zoneConfig:zoneConfig, zone:zone, publicKey:keyPair?.publicKey, privateKey:keyPair?.privateKey,
+				rpcService:rpcService, commandService:commandService]
 	}
 
 	/**
