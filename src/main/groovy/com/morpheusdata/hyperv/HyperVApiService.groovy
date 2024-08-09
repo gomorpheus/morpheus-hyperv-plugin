@@ -1,6 +1,7 @@
 package com.morpheusdata.hyperv
 
 import com.morpheusdata.core.MorpheusContext
+import com.morpheusdata.model.ComputeServer
 import groovy.json.JsonOutput
 import groovy.util.logging.Slf4j
 
@@ -20,8 +21,7 @@ class HyperVApiService {
     static defaultRoot = 'C:\\morpheus'
 
     def executeCommand(command, opts) {
-        def output
-        //= morpheusContext.executeWindowsCommand(address, port, username, password, command, noProfile, elevated)
+        def output = morpheusContext.executeWindowsCommand(opts.sshHost, opts.port, opts.username, opts.password, command, null, false).blockingGet()
         return output
     }
 
