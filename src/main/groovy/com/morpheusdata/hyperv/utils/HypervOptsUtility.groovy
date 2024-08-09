@@ -2,6 +2,7 @@ package com.morpheusdata.hyperv.utils
 
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.data.DataQuery
+import com.morpheusdata.hyperv.HyperVApiService
 import groovy.util.logging.Slf4j
 
 /**
@@ -10,14 +11,14 @@ import groovy.util.logging.Slf4j
 @Slf4j
 class HypervOptsUtility {
 
-    def getAllHypervServerOpts(MorpheusContext context, server) {
+    static getAllHypervServerOpts(MorpheusContext context, server) {
         def rtn = getHypervZoneOpts(context, server.cloud)
         rtn += getHypervHypervisorOpts(server.parentServer)
         rtn += getHypervServerOpts(context, server)
         return rtn
     }
 
-    def getHypervServerOpts(MorpheusContext context, server) {
+    static getHypervServerOpts(MorpheusContext context, server) {
         def zoneConfig = server.cloud.getConfigMap()
         def serverName = server.name //cleanName(server.name)
         def serverConfig = server.getConfigMap()
@@ -36,7 +37,7 @@ class HypervOptsUtility {
 //                osDiskSize:maxStorage, maxTotalStorage:maxTotalStorage, dataDisks:dataDisks]
     }
 
-    def getAllHypervWorloadOpts(MorpheusContext context, workload) {
+    static getAllHypervWorloadOpts(MorpheusContext context, workload) {
         def rtn = getHypervZoneOpts(context, workload.server.cloud)
         if(workload.server.parentServer) {
             rtn += getHypervHypervisorOpts(workload.server.parentServer)
@@ -45,7 +46,7 @@ class HypervOptsUtility {
         return rtn
     }
 
-    def getHypervWorkloadOpts(MorpheusContext context, container) {
+    static getHypervWorkloadOpts(MorpheusContext context, container) {
         def zoneConfig = container.server.zone.getConfigMap()
         def serverConfig = container.server.getConfigMap()
         def containerConfig = container.getConfigProperties()
@@ -65,7 +66,7 @@ class HypervOptsUtility {
 //                osDiskSize:maxStorage, dataDisks:dataDisks, maxTotalStorage:maxTotalStorage]
     }
 
-    def getHypervZoneOpts(MorpheusContext context, zone) {
+    static getHypervZoneOpts(MorpheusContext context, zone) {
         def zoneConfig = zone.getConfigMap()
         def keyPair = context.services.keyPair.find(new DataQuery().withFilter("account.id", zone.account.id))
 
@@ -74,11 +75,11 @@ class HypervOptsUtility {
 //        rpcService:rpcService, commandService:commandService]
     }
 
-    def getHypervHypervisorOpts(hypervisor) {
+    static getHypervHypervisorOpts(hypervisor) {
         def serverConfig = hypervisor.getConfigMap()
         log.info("hyperv config: ${serverConfig}")
-        def vmRoot = serverConfig.vmPath?.length() > 0 ? serverConfig.vmPath : HypervComputeUtility.defaultRoot + '\\VMs'
-        def diskRoot = serverConfig.diskPath?.length() > 0 ? serverConfig.diskPath : HypervComputeUtility.defaultRoot + '\\Disks'
+        def vmRoot = serverConfig.vmPath?.length() > 0 ? serverConfig.vmPath : HyperVApiService.defaultRoot + '\\VMs'
+        def diskRoot = serverConfig.diskPath?.length() > 0 ? serverConfig.diskPath : HyperVApiService.defaultRoot + '\\Disks'
         def zoneRoot = serverConfig.workingPath?.length() > 0 ? serverConfig.workingPath : '$HOME/morpheus'
         return [hypervisorConfig:serverConfig, hypervisor:hypervisor, sshHost:hypervisor.sshHost, sshUsername:hypervisor.sshUsername,
                 sshPassword:hypervisor.sshPassword, zoneRoot:zoneRoot, diskRoot:diskRoot, vmRoot:vmRoot]
