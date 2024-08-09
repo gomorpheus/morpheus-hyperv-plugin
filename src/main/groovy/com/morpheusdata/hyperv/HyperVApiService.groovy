@@ -78,10 +78,7 @@ class HyperVApiService {
         def dirResults = executeCommand(command, opts)
 
         if (metadataFile) {
-            //def tgtUrl = VirtualImageService.getCloudFileStreamUrl(opts.image.virtualImageId as Long, metadataFile,opts.userId as Long,opts.zone as ComputeZone)
-            // TODO: use morpheusContext.services.virtualImage.getCloudFileStreamUrl while implementing this method
-            def tgtUrl
-            //= morpheusContext.services.virtualImage.getCloudFileStreamUrl(virtualImage, cloudFile, createdBy, cloud)
+            def tgtUrl = morpheusContext.services.virtualImage.getCloudFileStreamUrl(opts.image, metadataFile, opts.user, opts.zone)
             tgtUrl = tgtUrl.replace("https", "http")
             log.debug("metadata url: ${tgtUrl}")
             fileList << [inline    : true, action: 'download', content: tgtUrl.bytes.encodeAsBase64(),
@@ -89,9 +86,7 @@ class HyperVApiService {
         }
         vhdFiles.each { vhdFile ->
             def tgtFilename = extractImageFileName(vhdFile.name)
-            //def tgtUrl = VirtualImageService.getCloudFileStreamUrl(opts.image.virtualImageId as Long, vhdFile,opts.userId as Long,opts.zone as ComputeZone)
-            // TODO: use morpheusContext.services.virtualImage.getCloudFileStreamUrl while implementing this method
-            def tgtUrl //= morpheusContext.services.virtualImage.getCloudFileStreamUrl(virtualImage, cloudFile, createdBy, cloud)
+            def tgtUrl = morpheusContext.services.virtualImage.getCloudFileStreamUrl(opts.image, vhdFile, opts.user, opts.zone)
             log.info("vhd url: ${tgtUrl}")
             fileList << [inline    : true, action: 'download', content: tgtUrl.bytes.encodeAsBase64(),
                          targetPath: "${tgtFolder}\\${tgtFilename}".toString()]
