@@ -4,6 +4,7 @@ import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.providers.CloudProvider
 import com.morpheusdata.core.providers.ProvisionProvider
+import com.morpheusdata.hyperv.utils.HypervOptsUtility
 import com.morpheusdata.model.BackupProvider
 import com.morpheusdata.model.Cloud
 import com.morpheusdata.model.CloudFolder
@@ -158,16 +159,26 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	ServiceResponse validate(Cloud cloud, ValidateCloudRequest validateCloudRequest) {
+		log.info("Ray :: validate: cloud: ${cloud}")
+		log.info("Ray :: validate: validateCloudRequest: ${validateCloudRequest}")
 		log.info("validateZone: ${cloud}")
 		def rtn = [success:false, zone:cloud, errors:[:]]
 		try {
+			log.info("Ray :: validate: cloud?.id: ${cloud?.id}")
 			if(cloud) {
 				def  requiredFields = ['host', 'workingPath', 'vmPath', 'diskPath']
-				def hypervOpts = getHypervZoneOpts(cloud)
+				log.info("Ray :: validate: requiredFields: ${requiredFields}")
+				def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, cloud)
+				log.info("Ray :: validate: hypervOpts: ${hypervOpts}")
 				def cloudConfig = cloud.getConfigMap()
-				rtn.errors = validateRequiredConfigFields(requiredFields, cloudConfig) // check:
-				//def credential = credentialService.loadCredentialConfig(opts.credential, zoneConfig)
+				log.info("Ray :: validate: cloudConfig: ${cloudConfig}")
+				rtn.errors = validateRequiredConfigFields(requiredFields, cloudConfig)
+				log.info("Ray :: validate: rtn.errors: ${rtn.errors}")
 				def credential = context.async.accountCredential.loadCredentialConfig(opts.credential, cloudConfig).blockingGet()
+				log.info("Ray :: validate: credential: ${credential}")
+				log.info("Ray :: validate: credential.data: ${credential.data}")
+				log.info("Ray :: validate: credential.data?.username: ${credential.data?.username}")
+				log.info("Ray :: validate: credential.data?.password: ${credential.data?.password}")
 				if(!credential.data?.username) {
 					rtn.msg = 'Enter a username'
 					rtn.errors.username = rtn.msg
@@ -175,11 +186,15 @@ class HyperVCloudProvider implements CloudProvider {
 					rtn.msg = 'Enter your password'
 					rtn.errors.password = rtn.msg
 				}
+				log.info("Ray :: validate: rtn.errors.size(): ${rtn.errors.size()}")
 				if(rtn.errors.size() == 0) {
+					log.info("Ray :: validate: cloud.enabled: ${cloud.enabled}")
 					if(cloud.enabled == true) {
 						hypervOpts += [hypervisor:[:], sshHost:cloudConfig.host, sshUsername:credential.data.username,
 									   sshPassword:credential.data.password, zoneRoot:cloudConfig.workingPath, diskRoot:cloudConfig.diskPath, vmRoot:cloudConfig.vmPath]
+						log.info("Ray :: validate: hypervOpts: ${hypervOpts}")
 						def vmSwitches = apiService.listVmSwitches(hypervOpts)
+						log.info("Ray :: validate: vmSwitches: ${vmSwitches}")
 						if(vmSwitches.success == true)
 							rtn.success = true
 						if(rtn.success == false)
@@ -194,19 +209,21 @@ class HyperVCloudProvider implements CloudProvider {
 				rtn.message = 'No zone found'
 			}
 		} catch(e) {
-			log.error("An Exception Has Occurred",e)
+			log.error("Ray :: validation: An Exception Has Occurred",e)
 		}
+		log.info("Ray :: validate: rtn: ${rtn}")
 		return ServiceResponse.create(rtn)
-
-
-		return ServiceResponse.success()
 	}
 
-	def getHypervZoneOpts(zone) {
-		def zoneConfig = zone.getConfigMap()
-		def keyPair = AccountKeyPair.findByAccount(zone.account)
-		return [account:zone.account, zoneConfig:zoneConfig, zone:zone, publicKey:keyPair?.publicKey, privateKey:keyPair?.privateKey,
-				rpcService:rpcService, commandService:commandService]
+	def validateRequiredConfigFields(fieldArray, config) {
+		def errors = [:]
+		fieldArray.each {field ->
+			if(config[field] != null && config[field]?.size() == 0) {
+				def display = field.replaceAll( /([A-Z])/, / $1/ ).toLowerCase()
+				errors[field] = "Enter a ${display}"
+			}
+		}
+		return errors
 	}
 
 	/**
