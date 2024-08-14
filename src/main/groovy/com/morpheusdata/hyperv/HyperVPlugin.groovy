@@ -27,9 +27,11 @@ class HyperVPlugin extends Plugin {
     @Override
     void initialize() {
         this.setName("Hyper-V")
-        this.registerProvider(new HyperVCloudProvider(this,this.morpheus))
-        this.registerProvider(new HyperVProvisionProvider(this,this.morpheus))
-        this.registerProvider(new HyperVBackupProvider(this,this.morpheus))
+        this.registerProviders(
+            new HyperVCloudProvider(this,this.morpheus),
+            new HyperVProvisionProvider(this,this.morpheus),
+            new HyperVBackupProvider(this,this.morpheus)
+        )
     }
 
     /**
