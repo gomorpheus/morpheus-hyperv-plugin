@@ -2,8 +2,14 @@ package com.morpheusdata.hyperv
 
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
+import com.morpheusdata.core.data.DataFilter
+import com.morpheusdata.core.data.DataOrFilter
+import com.morpheusdata.core.data.DataQuery
+import com.morpheusdata.core.data.DatasetQuery
 import com.morpheusdata.core.providers.CloudProvider
 import com.morpheusdata.core.providers.ProvisionProvider
+import com.morpheusdata.core.util.ConnectionUtils
+import com.morpheusdata.hyperv.utils.HypervOptsUtility
 import com.morpheusdata.model.BackupProvider
 import com.morpheusdata.model.Cloud
 import com.morpheusdata.model.CloudFolder
@@ -20,17 +26,21 @@ import com.morpheusdata.model.StorageControllerType
 import com.morpheusdata.model.StorageVolumeType
 import com.morpheusdata.request.ValidateCloudRequest
 import com.morpheusdata.response.ServiceResponse
+import groovy.util.logging.Slf4j
 
+@Slf4j
 class HyperVCloudProvider implements CloudProvider {
 	public static final String CLOUD_PROVIDER_CODE = 'hyperv'
 
 	protected MorpheusContext context
 	protected Plugin plugin
+	HyperVApiService apiService
 
 	public HyperVCloudProvider(Plugin plugin, MorpheusContext ctx) {
 		super()
 		this.@plugin = plugin
 		this.@context = ctx
+		this.apiService = new HyperVApiService(context)
 	}
 
 	/**
@@ -171,15 +181,166 @@ class HyperVCloudProvider implements CloudProvider {
 	/**
 	 * Zones/Clouds are refreshed periodically by the Morpheus Environment. This includes things like caching of brownfield
 	 * environments and resources such as Networks, Datastores, Resource Pools, etc.
-	 * @param cloudInfo cloud
+	 * @param cloud cloud
 	 * @return ServiceResponse. If ServiceResponse.success == true, then Cloud status will be set to Cloud.Status.ok. If
 	 * ServiceResponse.success == false, the Cloud status will be set to ServiceResponse.data['status'] or Cloud.Status.error
 	 * if not specified. So, to indicate that the Cloud is offline, return `ServiceResponse.error('cloud is not reachable', null, [status: Cloud.Status.offline])`
 	 */
 	@Override
-	ServiceResponse refresh(Cloud cloudInfo) {
+	ServiceResponse refresh(Cloud cloud) {
+		ServiceResponse response = ServiceResponse.prepare()
+		log.debug("refreshZone:${cloud}")
+		try {
+			def syncDate = new Date()
+			def hypervisorList = getHypervHypervisors(cloud)
+			def virtualMachineList = []
+			def allOnline = true
+			def anyOnline = false
+			for(hypervisor in hypervisorList) {
+				if(hypervisor.status == 'pending' || hypervisor.status == 'pendingDeleteApproval'){
+					continue
+				}
+				if(hypervisor.enabled == true) {
+					def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, cloud)
+					hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(hypervisor)
+					def hostOnline = ConnectionUtils.testHostConnectivity(hypervOpts.sshHost, 5985, false, true, null)
+					if(hostOnline) {
+						allOnline = hostOnline && allOnline
+						anyOnline = hostOnline || anyOnline
+						//check if this host is online
+						def hostResults = loadHypervHost([zone:cloud], hypervisor)
+						if(hostResults.success == true && hostResults.host && hostResults.host['ComputerName']) {
+							resolveUniqueIdsToVMids([zone: cloud], hypervisor)
+							def cacheResults = refreshCache([zone:cloud], hypervisor)
+							virtualMachineList += cacheResults.virtualMachines
+							if(cacheResults.success == true) {
+								allOnline = cacheResults.success && allOnline
+								anyOnline = cacheResults.success || anyOnline
+								updateHypervisorStatus(hypervisor, 'provisioned', 'on', '') // check:
+								clearHypervisorAlarm(hypervisor) // check:
+							} else {
+								updateHypervisorStatus(hypervisor, 'error', 'unknown', 'error connecting to hypervisor')
+								startHypervisorAlarm(hypervisor, 'error connecting to hypervisor')
+							}
+						} else {
+							updateHypervisorStatus(hypervisor, 'error', 'unknown', 'error connecting to hypervisor')
+							startHypervisorAlarm(hypervisor, 'error connecting to hypervisor')
+							allOnline = false
+						}
+					} else {
+						updateHypervisorStatus(hypervisor, 'error', 'unknown', 'error connecting to hypervisor')
+						startHypervisorAlarm(hypervisor, 'error connecting to hypervisor')
+						allOnline = false
+					}
+				} else {
+					clearHypervisorAlarm(hypervisor) // check:
+				}
+			}
+			if(anyOnline == true || allOnline == true) {
+				def vmCacheOpts = [zone: zone]
+				def doInventory = cloud.getConfigProperty('importExisting')
+				vmCacheOpts.createNew = (doInventory == 'on' || doInventory == 'true' || doInventory == true)
+				// TODO: cacheVirtualMachines need to be implemented with VM sync user story
+				// cacheVirtualMachines(vmCacheOpts, null, [virtualMachines: virtualMachineList, success: true])
+			}
+			if(allOnline == true && anyOnline == true) {
+				//updateZoneStatus(zone, 'ok', null, syncDate) // check:
+				context.async.cloud.updateCloudStatus(cloud, Cloud.Status.ok, null, syncDate) // check:
+				clearZoneAlarm(zone) // check:
+			} else if(anyOnline == true) {
+				updateZoneStatus(zone, 'warning', 'not all hypervisors online', syncDate) // check:
+				clearZoneAlarm(zone) // check:
+			} else {
+				updateZoneStatus(zone, 'error', 'no hypervisors online', syncDate)
+				startZoneAlarm(zone, 'no hypervisors online')
+			}
+		} catch(e) {
+			log.error("refresh zone error:${e}", e)
+		}
+
+
+
 		return ServiceResponse.success()
 	}
+
+	private Map refreshCache(opts, node){
+		def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, opts.zone)
+		hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
+		Map rtn = listVirtualMachines(hypervOpts)
+		if(rtn.success){
+			// TODO: cacheNetworks need to be implemented with cacheNetowork user story
+			//rtn.success = cacheNetworks(opts, node).success
+		}
+		return rtn
+	}
+
+	def getHypervHypervisors(Cloud cloud) {
+		def rtn = context.services.computeServer.list(new DataQuery().withFilter("zone", cloud).withFilter("computeServerType.code", "hypervHypervisor"))
+		return rtn
+	}
+
+	def loadHypervHost(opts, node) {
+		def rtn = [success:false]
+		try {
+			def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, opts.zone)
+			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
+			def hostResults = apiService.getHypervHost(hypervOpts)
+			if(hostResults.success == true) {
+				rtn.success = true
+				rtn.host = hostResults.host
+			}
+		} catch(e) {
+			log.error("loadHypervHost error:${e}", e)
+		}
+		return rtn
+	}
+
+	private resolveUniqueIdsToVMids(Map opts, node) {
+		//def hosts = ComputeServer.where { zone == opts.zone && computeServerType.code == 'hypervVm' && (uniqueId == '' || uniqueId == null)}.list()
+		DataQuery query  = new DatasetQuery().withFilters(
+				new DataFilter("zone", opts.zone),
+				new DataFilter("computeServerType.code", "hypervVm"),
+				new DataOrFilter(
+						new DataFilter('uniqueId', ''),
+						new DataFilter('uniqueId', null)
+				)
+		)
+		def hosts = context.services.computeServer.list(query)
+		if(hosts.size() < 1)
+			return
+
+		def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, opts.zone)
+		hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
+		def listResults = listVirtualMachines(hypervOpts)
+		if (listResults.success == true) {
+			def remoteVms = listResults.virtualMachines
+			for(server in hosts) {
+				def match
+				for(remoteVm in remoteVms){
+					if(remoteVm.Name == server.name){
+						match = remoteVm
+					}
+				}
+				if(match) {
+					server.uniqueId = match.ID
+					//server.save(flush: true)
+					context.services.computeServer.save(server)
+				}
+			}
+		}
+	}
+
+	def listVirtualMachines(opts) {
+		def rtn = [success:false, networks:[]]
+		try {
+			rtn = apiService.listVirtualMachines(opts)
+		} catch(e) {
+			log.debug("listVirtualMachines error: ${e}", e)
+		}
+		return rtn
+	}
+
+
 
 	/**
 	 * Zones/Clouds are refreshed periodically by the Morpheus Environment. This includes things like caching of brownfield
