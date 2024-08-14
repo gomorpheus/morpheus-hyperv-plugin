@@ -313,6 +313,14 @@ class HyperVCloudProvider implements CloudProvider {
 	Collection<ComputeServerType> getComputeServerTypes() {
 		Collection<ComputeServerType> serverTypes = []
 
+		// Host option type is used by multiple compute server types.
+		OptionType hostOptionType = new OptionType(
+			code:'computeServerType.hyperv.host', inputType: OptionType.InputType.SELECT, name:'host', category:'computeServerType.hyperv',
+			fieldName:'hypervHostId', fieldCode: 'gomorpheus.optiontype.Host', fieldLabel:'Host', fieldContext:'config', fieldGroup:'Options',
+			required:true, enabled:true, optionSource:'hypervHost', editable:false, global:false, placeHolder:null, helpBlock:'',
+			defaultValue:null, custom:false, displayOrder:10, fieldClass:null
+		)
+
 		//hyperv hypervisor
 		serverTypes << new ComputeServerType(code:'hypervHypervisor', name:'Hyper-V Hypervisor', description:'', platform:PlatformType.windows,
 				nodeType:'morpheus-hyperv-node', enabled:true, selectable:false, externalDelete:false, managed:false, controlPower:false,
@@ -354,14 +362,7 @@ class HyperVCloudProvider implements CloudProvider {
 				creatable:false, computeService:'hypervComputeService', displayOrder: 6, hasAutomation:true, reconfigureSupported:true,
 				containerHypervisor:true, bareMetalHost:false, vmHypervisor:false, agentType:ComputeServerType.AgentType.node, containerEngine:'docker', provisionTypeCode:'hyperv',
 				computeTypeCode:'docker-host',
-				optionTypes:[
-					new OptionType(
-							code:'computeServerType.hyperv.host', inputType: OptionType.InputType.SELECT, name:'host', category:'computeServerType.hyperv',
-							fieldName:'hypervHostId', fieldCode: 'gomorpheus.optiontype.Host', fieldLabel:'Host', fieldContext:'config', fieldGroup:'Options',
-							required:true, enabled:true, optionSource:'hypervHost', editable:false, global:false, placeHolder:null, helpBlock:'',
-							defaultValue:null, custom:false, displayOrder:10, fieldClass:null
-					)
-				]
+				optionTypes:[hostOptionType]
 		)
 
 		//kubernetes
@@ -371,28 +372,14 @@ class HyperVCloudProvider implements CloudProvider {
 				displayOrder:10, hasAutomation:true, containerHypervisor:true, bareMetalHost:false, vmHypervisor:false,
 				agentType: ComputeServerType.AgentType.host, containerEngine:'docker',
 				provisionTypeCode:'hyperv', computeTypeCode:'kube-master',
-				optionTypes:[
-					new OptionType(
-							code:'computeServerType.hyperv.host', inputType: OptionType.InputType.SELECT, name:'host', category:'computeServerType.hyperv',
-							fieldName:'hypervHostId', fieldCode: 'gomorpheus.optiontype.Host', fieldLabel:'Host', fieldContext:'config', fieldGroup:'Options',
-							required:true, enabled:true, optionSource:'hypervHost', editable:false, global:false, placeHolder:null, helpBlock:'',
-							defaultValue:null, custom:false, displayOrder:10, fieldClass:null
-					)
-				]
+				optionTypes:[hostOptionType]
 		)
 		serverTypes << new ComputeServerType(code:'hypervKubeWorker', name:'Hyper-V Kubernetes Worker', description:'', platform:PlatformType.linux,
 				nodeType:'kube-worker', reconfigureSupported: true, enabled:true, selectable:false, externalDelete:true, managed:true, controlPower:true,
 				controlSuspend:true, creatable:true, supportsConsoleKeymap: true, computeService:'hypervComputeService', displayOrder:10, hasAutomation:true,
 				containerHypervisor:true, bareMetalHost:false, vmHypervisor:false, agentType:ComputeServerType.AgentType.guest, containerEngine:'docker',
 				provisionTypeCode:'hyperv', computeTypeCode:'kube-worker',
-				optionTypes:[
-					new OptionType(
-							code:'computeServerType.hyperv.host', inputType: OptionType.InputType.SELECT, name:'host', category:'computeServerType.hyperv',
-							fieldName:'hypervHostId', fieldCode: 'gomorpheus.optiontype.Host', fieldLabel:'Host', fieldContext:'config', fieldGroup:'Options',
-							required:true, enabled:true, optionSource:'hypervHost', editable:false, global:false, placeHolder:null, helpBlock:'',
-							defaultValue:null, custom:false, displayOrder:10, fieldClass:null
-					)
-				]
+				optionTypes:[hostOptionType]
 		)
 
 		return serverTypes
