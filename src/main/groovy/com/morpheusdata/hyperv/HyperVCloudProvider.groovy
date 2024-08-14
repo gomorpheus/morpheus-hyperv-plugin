@@ -419,28 +419,6 @@ class HyperVCloudProvider implements CloudProvider {
 	 * @param cloudInfo instance of the cloud object that is being initialized.
 	 * @return ServiceResponse
 	 */
-	/*def initializeZone(opts) {
-		log.debug 'initializing zone'
-		def rtn = [success:false, zone:opts.zone, errors:[:]]
-		try {
-			if(rtn.zone) {
-				if(rtn.zone.enabled == true) {
-					def initResults = initializeHypervisor([zone:opts.zone])
-					log.debug("initResults: {}", initResults)
-					if(initResults.success == true) {
-						//cache info
-						cacheNetworks(opts, initResults.server)
-					}
-					rtn.success = true
-				}
-			} else {
-				rtn.message = 'No zone found'
-			}
-		} catch(e) {
-			log.error("An Exception Has Occurred",e)
-		}
-		return rtn
-	}*/
 	@Override
 	ServiceResponse initializeCloud(Cloud cloudInfo) {
 //		return ServiceResponse.success()
