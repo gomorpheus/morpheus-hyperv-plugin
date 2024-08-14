@@ -16,6 +16,7 @@ import com.morpheusdata.response.ProvisionResponse
 import com.morpheusdata.response.ServiceResponse
 
 class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider {
+	public static final String PROVIDER_CODE = 'hyperv.provision'
 	public static final String PROVISION_PROVIDER_CODE = 'hyperv'
 
 	protected MorpheusContext context
@@ -285,7 +286,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	String getCode() {
-		return PROVISION_PROVIDER_CODE
+		return PROVIDER_CODE
 	}
 
 	/**

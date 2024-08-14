@@ -316,29 +316,27 @@ class HyperVCloudProvider implements CloudProvider {
 		//hyperv hypervisor
 		serverTypes << new ComputeServerType(code:'hypervHypervisor', name:'Hyper-V Hypervisor', description:'', platform:PlatformType.windows,
 				nodeType:'morpheus-hyperv-node', enabled:true, selectable:false, externalDelete:false, managed:false, controlPower:false,
-				controlSuspend:false, creatable:true, computeService:'hypervComputeService', displayOrder:0, hasAutomation:false, hasAgent:true,
-				containerHypervisor:false, bareMetalHost:true, vmHypervisor:true, agentType: ComputeServerType.AgentType.node, morpheusHypervisor:false,
-				viewSet:'hypervHypervisor', provisionTypeCode:'hypervisor'
+				controlSuspend:false, creatable:true, computeService:'hypervComputeService', displayOrder:0, hasAutomation:false,
+				containerHypervisor:false, bareMetalHost:true, vmHypervisor:true, agentType: ComputeServerType.AgentType.node
 		)
 
 		//vms
 		serverTypes << new ComputeServerType(code:'hypervVm', name:'Hyper-V Linux VM', description:'', platform:PlatformType.linux,
 				nodeType:'morpheus-vm-node', enabled:true, selectable:false, externalDelete:true, managed:true, controlPower:true, controlSuspend:false,
-				creatable:false, computeService:'hypervComputeService', displayOrder: 0, hasAutomation:true, reconfigureSupported:true, hasAgent:true,
+				creatable:false, computeService:'hypervComputeService', displayOrder: 0, hasAutomation:true, reconfigureSupported:true,
 				containerHypervisor:false, bareMetalHost:false, vmHypervisor:false, agentType:ComputeServerType.AgentType.guest, guestVm:true,
 				provisionTypeCode:'hyperv'
 		)
 		serverTypes << new ComputeServerType(code:'hypervWindowsVm', name:'Hyper-V Windows VM', description:'', platform:PlatformType.windows,
 				nodeType:'morpheus-windows-vm-node', enabled:true, selectable:false, externalDelete:true, managed:true, controlPower:true,
 				controlSuspend:false, creatable:false, computeService:'hypervComputeService', displayOrder: 0, hasAutomation:true,
-				reconfigureSupported:true, hasAgent:true, containerHypervisor:false, bareMetalHost:false, vmHypervisor:false,
+				reconfigureSupported:true, containerHypervisor:false, bareMetalHost:false, vmHypervisor:false,
 				agentType: ComputeServerType.AgentType.guest, guestVm:true, provisionTypeCode:'hyperv'
 		)
 		serverTypes << new ComputeServerType(code:'hypervUnmanaged', name:'Hyper-V Instance', description:'hyper-v vm', platform:PlatformType.linux,
 				nodeType:'unmanaged', enabled:true, selectable:false, externalDelete:true, managed:false, controlPower:true, controlSuspend:false,
-				creatable:false, computeService:'hypervComputeService', deleteQueue:'computeUnmanagedDeleteServerQueue',
-				initializeQueue:'computeHyperVInitializeServerQueue', displayOrder:99, hasAutomation:false, hasAgent:true, containerHypervisor:false,
-				bareMetalHost:false, vmHypervisor:false, agentType: ComputeServerType.AgentType.guest, manageable: true, managedServerType:'hypervVm',
+				creatable:false, computeService:'hypervComputeService', displayOrder:99, hasAutomation:false, containerHypervisor:false,
+				bareMetalHost:false, vmHypervisor:false, agentType: ComputeServerType.AgentType.guest, managedServerType:'hypervVm',
 				guestVm:true, provisionTypeCode:'hyperv'
 		)
 
@@ -346,19 +344,19 @@ class HyperVCloudProvider implements CloudProvider {
 		serverTypes << new ComputeServerType(code:'hypervWindows', name:'Hyper-V Windows Host', description:'', platform:PlatformType.windows,
 				nodeType:'morpheus-windows-node', enabled:true, selectable:false, externalDelete:true, managed:true, controlPower:true,
 				controlSuspend:false, creatable:true, computeService:'hypervComputeService', displayOrder:7, hasAutomation:true, reconfigureSupported:true,
-				hasAgent:true, containerHypervisor:false, bareMetalHost:false, vmHypervisor:false, agentType: ComputeServerType.AgentType.node, guestVm:true,
+				containerHypervisor:false, bareMetalHost:false, vmHypervisor:false, agentType: ComputeServerType.AgentType.node, guestVm:true,
 				provisionTypeCode:'hyperv'
 		)
 
 		//docker
 		serverTypes << new ComputeServerType(code:'hypervLinux', name:'Hyper-V Docker Host', description:'', platform:PlatformType.linux,
 				nodeType:'morpheus-node', enabled:true, selectable:false, externalDelete:true, managed:true, controlPower:true, controlSuspend:false,
-				creatable:false, computeService:'hypervComputeService', displayOrder: 6, hasAutomation:true, reconfigureSupported:true, hasAgent:true,
-				containerHypervisor:true, bareMetalHost:false, vmHypervisor:false, agentType:'node', containerEngine:'docker', containerMode:'docker',
-				viewSet:'docker', provisionTypeCode:'hyperv', computeTypeCode:'docker-host',
+				creatable:false, computeService:'hypervComputeService', displayOrder: 6, hasAutomation:true, reconfigureSupported:true,
+				containerHypervisor:true, bareMetalHost:false, vmHypervisor:false, agentType:ComputeServerType.AgentType.node, containerEngine:'docker', provisionTypeCode:'hyperv',
+				computeTypeCode:'docker-host',
 				optionTypes:[
 					new OptionType(
-							code:'computeServerType.hyperv.host', type: OptionType.InputType.SELECT, name:'host', category:'computeServerType.hyperv',
+							code:'computeServerType.hyperv.host', inputType: OptionType.InputType.SELECT, name:'host', category:'computeServerType.hyperv',
 							fieldName:'hypervHostId', fieldCode: 'gomorpheus.optiontype.Host', fieldLabel:'Host', fieldContext:'config', fieldGroup:'Options',
 							required:true, enabled:true, optionSource:'hypervHost', editable:false, global:false, placeHolder:null, helpBlock:'',
 							defaultValue:null, custom:false, displayOrder:10, fieldClass:null
@@ -369,13 +367,13 @@ class HyperVCloudProvider implements CloudProvider {
 		//kubernetes
 		serverTypes << new ComputeServerType(code:'hypervKubeMaster', name:'Hyper-V Kubernetes Master', description:'', platform:PlatformType.linux,
 				nodeType:'kube-master', reconfigureSupported: true, enabled:true, selectable:false, externalDelete:true, managed:true,
-				controlPower:true, controlSuspend:true, creatable:true, supportsConsoleKeymap: true, computeService:'hypervComputeService',
-				displayOrder:10, hasAutomation:true, hasAgent:true, containerHypervisor:true, bareMetalHost:false, vmHypervisor:false,
-				agentType: ComputeServerType.AgentType.host, containerEngine:'docker', viewSet:'kubernetes', containerMode:'kubernetes',
+				controlPower:true, controlSuspend:true, creatable:true, supportsConsoleKeymap: true,
+				displayOrder:10, hasAutomation:true, containerHypervisor:true, bareMetalHost:false, vmHypervisor:false,
+				agentType: ComputeServerType.AgentType.host, containerEngine:'docker',
 				provisionTypeCode:'hyperv', computeTypeCode:'kube-master',
 				optionTypes:[
 					new OptionType(
-							code:'computeServerType.hyperv.host', type: OptionType.InputType.SELECT, name:'host', category:'computeServerType.hyperv',
+							code:'computeServerType.hyperv.host', inputType: OptionType.InputType.SELECT, name:'host', category:'computeServerType.hyperv',
 							fieldName:'hypervHostId', fieldCode: 'gomorpheus.optiontype.Host', fieldLabel:'Host', fieldContext:'config', fieldGroup:'Options',
 							required:true, enabled:true, optionSource:'hypervHost', editable:false, global:false, placeHolder:null, helpBlock:'',
 							defaultValue:null, custom:false, displayOrder:10, fieldClass:null
@@ -385,11 +383,11 @@ class HyperVCloudProvider implements CloudProvider {
 		serverTypes << new ComputeServerType(code:'hypervKubeWorker', name:'Hyper-V Kubernetes Worker', description:'', platform:PlatformType.linux,
 				nodeType:'kube-worker', reconfigureSupported: true, enabled:true, selectable:false, externalDelete:true, managed:true, controlPower:true,
 				controlSuspend:true, creatable:true, supportsConsoleKeymap: true, computeService:'hypervComputeService', displayOrder:10, hasAutomation:true,
-				hasAgent:true, containerHypervisor:true, bareMetalHost:false, vmHypervisor:false, agentType:'vm', containerEngine:'docker', viewSet:'kubernetes',
-				containerMode:'kubernetes', provisionTypeCode:'hyperv', computeTypeCode:'kube-worker',
+				containerHypervisor:true, bareMetalHost:false, vmHypervisor:false, agentType:ComputeServerType.AgentType.guest, containerEngine:'docker',
+				provisionTypeCode:'hyperv', computeTypeCode:'kube-worker',
 				optionTypes:[
 					new OptionType(
-							code:'computeServerType.hyperv.host', type: OptionType.InputType.SELECT, name:'host', category:'computeServerType.hyperv',
+							code:'computeServerType.hyperv.host', inputType: OptionType.InputType.SELECT, name:'host', category:'computeServerType.hyperv',
 							fieldName:'hypervHostId', fieldCode: 'gomorpheus.optiontype.Host', fieldLabel:'Host', fieldContext:'config', fieldGroup:'Options',
 							required:true, enabled:true, optionSource:'hypervHost', editable:false, global:false, placeHolder:null, helpBlock:'',
 							defaultValue:null, custom:false, displayOrder:10, fieldClass:null
