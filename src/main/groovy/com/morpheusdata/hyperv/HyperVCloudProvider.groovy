@@ -76,10 +76,10 @@ class HyperVCloudProvider implements CloudProvider {
 		Collection<OptionType> options = []
 		options << new OptionType(
 				name: 'Hyper-V Host',
-				code: 'zoneType.hyperv.host',
+				code: 'zoneType.hyperv.hypervHost',
 				fieldName: 'hypervHost',
 				displayOrder: displayOrder,
-				fieldCode: 'gomorpheus.optiontype.Host',
+				fieldCode: 'gomorpheus.optiontype.hypervHost',
 				fieldLabel:'Hyper-V Host',
 				required: true,
 				inputType: OptionType.InputType.TEXT
