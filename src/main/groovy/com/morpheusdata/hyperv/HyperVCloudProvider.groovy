@@ -75,7 +75,16 @@ class HyperVCloudProvider implements CloudProvider {
 		def displayOrder = 0
 		Collection<OptionType> options = []
 		options << new OptionType(
-				code			: 'zoneType.hyperv.host',
+				name: 'Hyper-V Host',
+				code: 'zoneType.hyperv.host',
+				fieldName: 'hypervHost',
+				displayOrder: displayOrder,
+				fieldCode: 'gomorpheus.optiontype.Host',
+				fieldLabel:'Hyper-V Host',
+				required: true,
+				inputType: OptionType.InputType.TEXT
+
+				/*code			: 'zoneType.hyperv.host',
 				inputType		: OptionType.InputType.TEXT,
 				name			: 'Host',
 				category		: 'zoneType.hyperv',
@@ -88,10 +97,30 @@ class HyperVCloudProvider implements CloudProvider {
 				required		: true,
 				editable		: false,
 				global			: false,
-				fieldSize		: 15
+				fieldSize		: 15*/
 		)
 		options << new OptionType(
-				code:'zoneType.hyperv.workingPath',
+				name: 'Winrm Port',
+				code: 'zoneType.hyperv.winrmPort',
+				fieldName: 'winrmPort',
+				displayOrder: displayOrder += 10,
+				fieldCode: 'gomorpheus.optiontype.winrmPort',
+				fieldLabel:'Winrm Port',
+				required: true,
+				inputType: OptionType.InputType.TEXT
+		)
+		options << new OptionType(
+				name: 'Working Path',
+				code: 'zoneType.hyperv.workingPath',
+				fieldName: 'workingPath',
+				displayOrder: displayOrder += 10,
+				fieldCode: 'gomorpheus.optiontype.WorkingPath',
+				fieldLabel:'Working Path',
+				required: true,
+				inputType: OptionType.InputType.TEXT,
+				defaultValue: 'c:\\Temp'
+
+				/*code:'zoneType.hyperv.workingPath',
 				inputType: OptionType.InputType.TEXT,
 				name:'Working Path',
 				category:'zoneType.hyperv',
@@ -103,10 +132,20 @@ class HyperVCloudProvider implements CloudProvider {
 				required:true,
 				editable:false,
 				defaultValue:'c:\\Temp',
-				fieldSize:15
+				fieldSize:15*/
 		)
 		options << new OptionType(
-				code:'zoneType.hyperv.vmPath',
+				name: 'VM Path',
+				code: 'zoneType.hyperv.vmPath',
+				fieldName: 'vmPath',
+				displayOrder: displayOrder += 10,
+				fieldCode: 'gomorpheus.optiontype.VmPath',
+				fieldLabel:'VM Path',
+				required: true,
+				inputType: OptionType.InputType.TEXT,
+				defaultValue: 'c:\\VMs',
+
+				/*code:'zoneType.hyperv.vmPath',
 				inputType: OptionType.InputType.TEXT,
 				name:'VM Path',
 				category:'zoneType.hyperv',
@@ -118,10 +157,20 @@ class HyperVCloudProvider implements CloudProvider {
 				required:true,
 				editable:false,
 				defaultValue:'c:\\VMs',
-				fieldSize:15
+				fieldSize:15*/
 		)
 		options << new OptionType(
-				code:'zoneType.hyperv.diskPath',
+				name: 'Disk Path',
+				code: 'zoneType.hyperv.diskPath',
+				fieldName: 'diskPath',
+				displayOrder: displayOrder += 10,
+				fieldCode: 'gomorpheus.optiontype.DiskPath',
+				fieldLabel:'Disk Path',
+				required: true,
+				inputType: OptionType.InputType.TEXT,
+				defaultValue:'c:\\VirtualDisks',
+
+				/*code:'zoneType.hyperv.diskPath',
 				inputType: OptionType.InputType.TEXT,
 				name:'Disk Path',
 				category:'zoneType.hyperv',
@@ -133,10 +182,23 @@ class HyperVCloudProvider implements CloudProvider {
 				required:true,
 				editable:false,
 				defaultValue:'c:\\VirtualDisks',
-				fieldSize:15
+				fieldSize:15*/
 		)
 		options << new OptionType(
-				code:'zoneType.hyperv.credential',
+				name: 'Credentials',
+				code: 'zoneType.hyperv.credential',
+				fieldName: 'type',
+				displayOrder: displayOrder += 10,
+				fieldCode: 'gomorpheus.label.credentials',
+				fieldLabel:'Credentials',
+				required: true,
+				defaultValue:'local',
+				inputType: OptionType.InputType.CREDENTIAL,
+				fieldContext: 'credential',
+				optionSource:'credentials',
+				config: '{"credentialTypes":["username-password"]}'
+
+				/*code:'zoneType.hyperv.credential',
 				inputType: OptionType.InputType.CREDENTIAL,
 				name:'Credentials',
 				category:'zoneType.hyperv',
@@ -149,10 +211,21 @@ class HyperVCloudProvider implements CloudProvider {
 				required:true,
 				defaultValue:'local',
 				optionSource:'credentials',
-				config: '{"credentialTypes":["username-password"]}'
+				config: '{"credentialTypes":["username-password"]}'*/
 		)
 		options << new OptionType(
-				code:'zoneType.hyperv.username',
+				name: 'Username',
+				code: 'zoneType.hyperv.username',
+				fieldName: 'username',
+				displayOrder: displayOrder += 10,
+				fieldCode: 'gomorpheus.optiontype.Username',
+				fieldLabel:'Username',
+				required: true,
+				inputType: OptionType.InputType.TEXT,
+				fieldContext: 'config',
+				localCredential: true
+
+				/*code:'zoneType.hyperv.username',
 				inputType: OptionType.InputType.TEXT,
 				name:'Username',
 				category:'zoneType.hyperv',
@@ -165,10 +238,21 @@ class HyperVCloudProvider implements CloudProvider {
 				required:true,
 				editable:false,
 				fieldSize:15,
-				localCredential:true
+				localCredential:true*/
 		)
 		options << new OptionType(
-				code:'zoneType.hyperv.password',
+				name: 'Password',
+				code: 'zoneType.hyperv.password',
+				fieldName: 'password',
+				displayOrder: displayOrder += 10,
+				fieldCode: 'gomorpheus.optiontype.Password',
+				fieldLabel:'Password',
+				required: true,
+				inputType: OptionType.InputType.PASSWORD,
+				fieldContext: 'config',
+				localCredential: true
+
+				/*code:'zoneType.hyperv.password',
 				inputType: OptionType.InputType.PASSWORD,
 				name:'Password',
 				category:'zoneType.hyperv',
@@ -181,11 +265,11 @@ class HyperVCloudProvider implements CloudProvider {
 				required:true,
 				editable:false,
 				fieldSize:15,
-				localCredential:true
+				localCredential:true*/
 		)
 		options << new OptionType(
 				name: 'Inventory Existing Instances',
-				code: 'zoneType.xen.importExisting',
+				code: 'zoneType.hyperv.importExisting',
 				fieldName: 'importExisting',
 				displayOrder: displayOrder += 10,
 				fieldLabel: 'Inventory Existing Instances',
