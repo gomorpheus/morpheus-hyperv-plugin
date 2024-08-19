@@ -83,21 +83,6 @@ class HyperVCloudProvider implements CloudProvider {
 				fieldLabel:'Hyper-V Host',
 				required: true,
 				inputType: OptionType.InputType.TEXT
-
-				/*code			: 'zoneType.hyperv.host',
-				inputType		: OptionType.InputType.TEXT,
-				name			: 'Host',
-				category		: 'zoneType.hyperv',
-				fieldName		: 'host',
-				displayOrder	: displayOrder,
-				fieldCode		: 'gomorpheus.optiontype.Host',
-				fieldLabel		: 'Host',
-				fieldContext	: 'config',
-				fieldGroup		: 'Connection Config',
-				required		: true,
-				editable		: false,
-				global			: false,
-				fieldSize		: 15*/
 		)
 		options << new OptionType(
 				name: 'Winrm Port',
@@ -119,20 +104,6 @@ class HyperVCloudProvider implements CloudProvider {
 				required: true,
 				inputType: OptionType.InputType.TEXT,
 				defaultValue: 'c:\\Temp'
-
-				/*code:'zoneType.hyperv.workingPath',
-				inputType: OptionType.InputType.TEXT,
-				name:'Working Path',
-				category:'zoneType.hyperv',
-				fieldName:'workingPath',
-				displayOrder: displayOrder += 10,
-				fieldCode: 'gomorpheus.optiontype.WorkingPath',
-				fieldLabel:'Working Path', fieldContext:'config',
-				fieldGroup:'Connection Config',
-				required:true,
-				editable:false,
-				defaultValue:'c:\\Temp',
-				fieldSize:15*/
 		)
 		options << new OptionType(
 				name: 'VM Path',
@@ -144,20 +115,6 @@ class HyperVCloudProvider implements CloudProvider {
 				required: true,
 				inputType: OptionType.InputType.TEXT,
 				defaultValue: 'c:\\VMs',
-
-				/*code:'zoneType.hyperv.vmPath',
-				inputType: OptionType.InputType.TEXT,
-				name:'VM Path',
-				category:'zoneType.hyperv',
-				fieldName:'vmPath',
-				displayOrder: displayOrder += 10,
-				fieldCode: 'gomorpheus.optiontype.VmPath',
-				fieldLabel:'VM Path',
-				fieldGroup:'Connection Config',
-				required:true,
-				editable:false,
-				defaultValue:'c:\\VMs',
-				fieldSize:15*/
 		)
 		options << new OptionType(
 				name: 'Disk Path',
@@ -169,20 +126,6 @@ class HyperVCloudProvider implements CloudProvider {
 				required: true,
 				inputType: OptionType.InputType.TEXT,
 				defaultValue:'c:\\VirtualDisks',
-
-				/*code:'zoneType.hyperv.diskPath',
-				inputType: OptionType.InputType.TEXT,
-				name:'Disk Path',
-				category:'zoneType.hyperv',
-				fieldName:'diskPath',
-				displayOrder: displayOrder += 10,
-				fieldCode: 'gomorpheus.optiontype.DiskPath',
-				fieldLabel:'Disk Path',
-				fieldGroup:'Connection Config',
-				required:true,
-				editable:false,
-				defaultValue:'c:\\VirtualDisks',
-				fieldSize:15*/
 		)
 		options << new OptionType(
 				name: 'Credentials',
@@ -197,21 +140,6 @@ class HyperVCloudProvider implements CloudProvider {
 				fieldContext: 'credential',
 				optionSource:'credentials',
 				config: '{"credentialTypes":["username-password"]}'
-
-				/*code:'zoneType.hyperv.credential',
-				inputType: OptionType.InputType.CREDENTIAL,
-				name:'Credentials',
-				category:'zoneType.hyperv',
-				fieldName:'type',
-				displayOrder: displayOrder += 10,
-				fieldCode:'gomorpheus.label.credentials',
-				fieldLabel:'Credentials',
-				fieldContext:'credential',
-				fieldGroup:'Connection Config',
-				required:true,
-				defaultValue:'local',
-				optionSource:'credentials',
-				config: '{"credentialTypes":["username-password"]}'*/
 		)
 		options << new OptionType(
 				name: 'Username',
@@ -224,21 +152,6 @@ class HyperVCloudProvider implements CloudProvider {
 				inputType: OptionType.InputType.TEXT,
 				fieldContext: 'config',
 				localCredential: true
-
-				/*code:'zoneType.hyperv.username',
-				inputType: OptionType.InputType.TEXT,
-				name:'Username',
-				category:'zoneType.hyperv',
-				fieldName:'username',
-				displayOrder: displayOrder += 10,
-				fieldCode: 'gomorpheus.optiontype.Username',
-				fieldLabel:'Username',
-				fieldContext:'config',
-				fieldGroup:'Connection Config',
-				required:true,
-				editable:false,
-				fieldSize:15,
-				localCredential:true*/
 		)
 		options << new OptionType(
 				name: 'Password',
@@ -251,21 +164,6 @@ class HyperVCloudProvider implements CloudProvider {
 				inputType: OptionType.InputType.PASSWORD,
 				fieldContext: 'config',
 				localCredential: true
-
-				/*code:'zoneType.hyperv.password',
-				inputType: OptionType.InputType.PASSWORD,
-				name:'Password',
-				category:'zoneType.hyperv',
-				fieldName:'password',
-				displayOrder: displayOrder += 10,
-				fieldCode: 'gomorpheus.optiontype.Password',
-				fieldLabel:'Password',
-				fieldContext:'config',
-				fieldGroup:'Connection Config',
-				required:true,
-				editable:false,
-				fieldSize:15,
-				localCredential:true*/
 		)
 		options << new OptionType(
 				name: 'Inventory Existing Instances',
@@ -490,19 +388,13 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	ServiceResponse initializeCloud(Cloud cloudInfo) {
-//		return ServiceResponse.success()
-//		log.debug ('initializing cloud: {}', cloudInfo.code)
-//		def rtn = [success:false, zone:opts.zone, errors:[:]]
+		log.debug ('initializing cloud: {}', cloudInfo.code)
 		ServiceResponse rtn = ServiceResponse.prepare()
-		log.debug ('RAZI :: initializing cloud: {}', cloudInfo.code)
-		log.info("RAZI :: initializeCloud -> rtn: ${rtn}")
 		try {
 			if(cloudInfo) {
-				log.info("RAZI :: cloudInfo.enabled: ${cloudInfo.enabled}")
 				if(cloudInfo.enabled == true) {
 					def initResults = initializeHypervisor(cloudInfo)
-//					log.debug("initResults: {}", initResults)
-					log.debug("RAZI :: initResults: {}", initResults)
+					log.debug("initResults: {}", initResults)
 					if(initResults.success == true) {
 					// TODO: below methods should be enebled after implementing it.
 //						refresh(cloudInfo)
@@ -512,16 +404,14 @@ class HyperVCloudProvider implements CloudProvider {
 				}
 			} else {
 				rtn.msg = 'No zone found'
-				log.info("RAZI :: rtn in else: ${rtn}")
 			}
 		} catch(e) {
 			log.error("initialize cloud error: {}",e)
 		}
-		log.info("RAZI :: rtn in last: ${rtn}")
 		return rtn
 	}
 
-	// TODO: Below method would be implemented later by taking reference from embedded code
+	// TODO: Below method would be implemented later by taking reference from embedded code. we have separate story to work on this
 	def initializeHypervisor(cloud) {
 		def rtn = [success:true]
 		return rtn

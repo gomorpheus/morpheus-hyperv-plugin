@@ -68,7 +68,7 @@ class HypervOptsUtility {
 
     static getHypervZoneOpts(MorpheusContext context, zone) {
         def zoneConfig = zone.getConfigMap()
-        def keyPair = context.services.keyPair.find(new DataQuery().withFilter("account.id", zone.account.id))
+        def keyPair = context.services.keyPair.find(new DataQuery().withFilter("accountId", zone.account.id))
 
         return [account:zone.account, zoneConfig:zoneConfig, zone:zone, publicKey:keyPair?.publicKey, privateKey:keyPair?.privateKey]
         // TODO: below line is commented for now, need to work on this if its needed.
