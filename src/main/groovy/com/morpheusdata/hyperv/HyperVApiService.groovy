@@ -21,7 +21,12 @@ class HyperVApiService {
     static defaultRoot = 'C:\\morpheus'
 
     def executeCommand(command, opts) {
-        def output = morpheusContext.executeWindowsCommand(opts.sshHost, opts.port, opts.username, opts.password, command, null, false).blockingGet()
+        log.info("Ray :: apiService: executeCommand: command: ${command}")
+        log.info("Ray :: apiService: executeCommand: newOpts.sshHost: ${opts.sshHost}")
+        log.info("Ray :: apiService: executeCommand: newOpts.sshPort: ${opts.sshPort}")
+        log.info("Ray :: apiService: executeCommand: newOpts.username: ${opts.sshUsername}")
+        log.info("Ray :: apiService: executeCommand: newOpts.password: ${opts.sshPassword}")
+        def output = morpheusContext.executeWindowsCommand(opts.sshHost, opts.sshPort?.toInteger(), opts.sshUsername, opts.sshPassword, command, null, false).blockingGet()
         return output
     }
 
@@ -415,16 +420,20 @@ class HyperVApiService {
     }
 
     def getHypervHost(opts) {
+        log.info ("Ray :: getHypervHost: opts: ${opts}")
         def rtn = [success: false]
         def command = "Get-VMHost | Format-List"
         log.debug("getHypervHost command: ${command}")
+        log.info ("Ray :: getHypervHost: command: ${command}")
         def results = executeCommand(command, opts)
         log.debug("getHypervHost: ${results}")
+        log.info ("Ray :: getHypervHost: results: ${results}")
         if (results.success == true && results.exitValue == 0) {
             rtn.host = parseHypervListData(results.data)
             rtn.success = true
         }
         log.debug("getHypervHost: ${rtn}")
+        log.info ("Ray :: getHypervHost: rtn: ${rtn}")
         return rtn
     }
 
@@ -546,6 +555,7 @@ class HyperVApiService {
     }
 
     def listVirtualMachines(opts) {
+        log.info ("Ray :: service: listVirtualMachines: opts: ${opts}")
         def rtn = [success: false, virtualMachines: []]
 
 
@@ -629,6 +639,7 @@ class HyperVApiService {
             fetch(currentOffset)
             currentOffset += pageSize
         }
+        log.info ("Ray :: service: listVirtualMachines: rtn: ${rtn}")
 
         return rtn
     }
