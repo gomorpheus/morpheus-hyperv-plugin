@@ -2,10 +2,14 @@ package com.morpheusdata.hyperv
 
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
+
 import com.morpheusdata.core.data.DataFilter
 import com.morpheusdata.core.data.DataOrFilter
 import com.morpheusdata.core.data.DataQuery
 import com.morpheusdata.core.data.DatasetQuery
+
+import com.morpheusdata.core.data.DataQuery
+
 import com.morpheusdata.core.providers.CloudProvider
 import com.morpheusdata.core.providers.ProvisionProvider
 import com.morpheusdata.core.util.ConnectionUtils
@@ -22,6 +26,7 @@ import com.morpheusdata.model.Network
 import com.morpheusdata.model.NetworkSubnetType
 import com.morpheusdata.model.NetworkType
 import com.morpheusdata.model.OptionType
+import com.morpheusdata.model.PlatformType
 import com.morpheusdata.model.StorageControllerType
 import com.morpheusdata.model.StorageVolumeType
 import com.morpheusdata.request.ValidateCloudRequest
@@ -33,13 +38,13 @@ class HyperVCloudProvider implements CloudProvider {
 	public static final String CLOUD_PROVIDER_CODE = 'hyperv'
 
 	protected MorpheusContext context
-	protected Plugin plugin
+	protected HyperVPlugin plugin
 	HyperVApiService apiService
 
-	public HyperVCloudProvider(Plugin plugin, MorpheusContext ctx) {
+	public HyperVCloudProvider(HyperVPlugin plugin, MorpheusContext context) {
 		super()
 		this.@plugin = plugin
-		this.@context = ctx
+		this.@context = context
 		this.apiService = new HyperVApiService(context)
 	}
 
@@ -59,8 +64,7 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	Icon getIcon() {
-		// TODO: change icon paths to correct filenames once added to your project
-		return new Icon(path:'cloud.svg', darkPath:'cloud-dark.svg')
+		return new Icon(path:'hyperv.svg', darkPath:'hyperv.svg')
 	}
 
 	/**
@@ -70,8 +74,7 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	Icon getCircularIcon() {
-		// TODO: change icon paths to correct filenames once added to your project
-		return new Icon(path:'cloud-circular.svg', darkPath:'cloud-circular-dark.svg')
+		return new Icon(path:'hyperv-circular.svg', darkPath:'hyperv-circular.svg')
 	}
 
 	/**
@@ -80,7 +83,109 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	Collection<OptionType> getOptionTypes() {
+		def displayOrder = 0
 		Collection<OptionType> options = []
+		options << new OptionType(
+				name: 'Hyper-V Host',
+				code: 'zoneType.hyperv.hypervHost',
+				fieldName: 'hypervHost',
+				displayOrder: displayOrder,
+				fieldCode: 'gomorpheus.optiontype.hypervHost',
+				fieldLabel:'Hyper-V Host',
+				required: true,
+				inputType: OptionType.InputType.TEXT
+		)
+		options << new OptionType(
+				name: 'Winrm Port',
+				code: 'zoneType.hyperv.winrmPort',
+				fieldName: 'winrmPort',
+				displayOrder: displayOrder += 10,
+				fieldCode: 'gomorpheus.optiontype.winrmPort',
+				fieldLabel:'Winrm Port',
+				required: true,
+				inputType: OptionType.InputType.TEXT
+		)
+		options << new OptionType(
+				name: 'Working Path',
+				code: 'zoneType.hyperv.workingPath',
+				fieldName: 'workingPath',
+				displayOrder: displayOrder += 10,
+				fieldCode: 'gomorpheus.optiontype.WorkingPath',
+				fieldLabel:'Working Path',
+				required: true,
+				inputType: OptionType.InputType.TEXT,
+				defaultValue: 'c:\\Temp'
+		)
+		options << new OptionType(
+				name: 'VM Path',
+				code: 'zoneType.hyperv.vmPath',
+				fieldName: 'vmPath',
+				displayOrder: displayOrder += 10,
+				fieldCode: 'gomorpheus.optiontype.VmPath',
+				fieldLabel:'VM Path',
+				required: true,
+				inputType: OptionType.InputType.TEXT,
+				defaultValue: 'c:\\VMs',
+		)
+		options << new OptionType(
+				name: 'Disk Path',
+				code: 'zoneType.hyperv.diskPath',
+				fieldName: 'diskPath',
+				displayOrder: displayOrder += 10,
+				fieldCode: 'gomorpheus.optiontype.DiskPath',
+				fieldLabel:'Disk Path',
+				required: true,
+				inputType: OptionType.InputType.TEXT,
+				defaultValue:'c:\\VirtualDisks',
+		)
+		options << new OptionType(
+				name: 'Credentials',
+				code: 'zoneType.hyperv.credential',
+				fieldName: 'type',
+				displayOrder: displayOrder += 10,
+				fieldCode: 'gomorpheus.label.credentials',
+				fieldLabel:'Credentials',
+				required: true,
+				defaultValue:'local',
+				inputType: OptionType.InputType.CREDENTIAL,
+				fieldContext: 'credential',
+				optionSource:'credentials',
+				config: '{"credentialTypes":["username-password"]}'
+		)
+		options << new OptionType(
+				name: 'Username',
+				code: 'zoneType.hyperv.username',
+				fieldName: 'username',
+				displayOrder: displayOrder += 10,
+				fieldCode: 'gomorpheus.optiontype.Username',
+				fieldLabel:'Username',
+				required: true,
+				inputType: OptionType.InputType.TEXT,
+				fieldContext: 'config',
+				localCredential: true
+		)
+		options << new OptionType(
+				name: 'Password',
+				code: 'zoneType.hyperv.password',
+				fieldName: 'password',
+				displayOrder: displayOrder += 10,
+				fieldCode: 'gomorpheus.optiontype.Password',
+				fieldLabel:'Password',
+				required: true,
+				inputType: OptionType.InputType.PASSWORD,
+				fieldContext: 'config',
+				localCredential: true
+		)
+		options << new OptionType(
+				name: 'Inventory Existing Instances',
+				code: 'zoneType.hyperv.importExisting',
+				fieldName: 'importExisting',
+				displayOrder: displayOrder += 10,
+				fieldLabel: 'Inventory Existing Instances',
+				required: false,
+				inputType: OptionType.InputType.CHECKBOX,
+				fieldContext: 'config'
+		)
 		return options
 	}
 
@@ -100,8 +205,7 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	Collection<BackupProvider> getAvailableBackupProviders() {
-		Collection<BackupProvider> providers = []
-		return providers
+		return this.@plugin.getProvidersByType(BackupProvider) as Collection<BackupProvider>
 	}
 
 	/**
@@ -110,7 +214,45 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	Collection<NetworkType> getNetworkTypes() {
-		Collection<NetworkType> networks = []
+		Collection<NetworkType> networks = context.services.network.list(new DataQuery().withFilter(
+				'code','in', ['dockerBridge', 'childNetwork', 'overlay']))
+
+		networks << new NetworkType([
+				code				: 'hypervExternalNetwork',
+				name				: 'Hyper-V External',
+				description			: '',
+				overlay				: false,
+				externalType		: 'External',
+				creatable			: false,
+				cidrEditable		: true,
+				dhcpServerEditable	: true,
+				dnsEditable			: true,
+				gatewayEditable		: true,
+				cidrRequired		: false,
+				vlanIdEditable		: true,
+				canAssignPool		: true,
+				hasNetworkServer	: false,
+				hasCidr				: true,
+		])
+
+		networks << new NetworkType([
+				code				: 'hypervInternalNetwork',
+				name				: 'Hyper-V Internal',
+				description			: '',
+				overlay				: false,
+				externalType		: 'Internal',
+				creatable			: false,
+				cidrEditable		: true,
+				dhcpServerEditable	: true,
+				dnsEditable			: true,
+				gatewayEditable		: true,
+				cidrRequired		: false,
+				vlanIdEditable		: true,
+				canAssignPool		: true,
+				hasNetworkServer	: false,
+				hasCidr				: true,
+		])
+
 		return networks
 	}
 
@@ -121,6 +263,18 @@ class HyperVCloudProvider implements CloudProvider {
 	@Override
 	Collection<NetworkSubnetType> getSubnetTypes() {
 		Collection<NetworkSubnetType> subnets = []
+		subnets << new NetworkSubnetType([
+				code				: 'hyperv',
+				name				: 'Hyper-V Subnet',
+				description			: '',
+				creatable			: false,
+				deletable			: false,
+				dhcpServerEditable	: false,
+				canAssignPool		: false,
+				vlanIdEditable		: false,
+				cidrEditable		: false,
+				cidrRequired		: false
+		])
 		return subnets
 	}
 
@@ -151,6 +305,76 @@ class HyperVCloudProvider implements CloudProvider {
 	@Override
 	Collection<ComputeServerType> getComputeServerTypes() {
 		Collection<ComputeServerType> serverTypes = []
+
+		// Host option type is used by multiple compute server types.
+		OptionType hostOptionType = new OptionType(
+			code:'computeServerType.hyperv.host', inputType: OptionType.InputType.SELECT, name:'host', category:'computeServerType.hyperv',
+			fieldName:'hypervHostId', fieldCode: 'gomorpheus.optiontype.Host', fieldLabel:'Host', fieldContext:'config', fieldGroup:'Options',
+			required:true, enabled:true, optionSource:'hypervHost', editable:false, global:false, placeHolder:null, helpBlock:'',
+			defaultValue:null, custom:false, displayOrder:10, fieldClass:null
+		)
+
+		//hyperv hypervisor
+		serverTypes << new ComputeServerType(code:'hypervHypervisor', name:'Hyper-V Hypervisor', description:'', platform:PlatformType.windows,
+				nodeType:'morpheus-hyperv-node', enabled:true, selectable:false, externalDelete:false, managed:false, controlPower:false,
+				controlSuspend:false, creatable:true, computeService:'hypervComputeService', displayOrder:0, hasAutomation:false,
+				containerHypervisor:false, bareMetalHost:true, vmHypervisor:true, agentType: ComputeServerType.AgentType.node
+		)
+
+		//vms
+		serverTypes << new ComputeServerType(code:'hypervVm', name:'Hyper-V Linux VM', description:'', platform:PlatformType.linux,
+				nodeType:'morpheus-vm-node', enabled:true, selectable:false, externalDelete:true, managed:true, controlPower:true, controlSuspend:false,
+				creatable:false, computeService:'hypervComputeService', displayOrder: 0, hasAutomation:true, reconfigureSupported:true,
+				containerHypervisor:false, bareMetalHost:false, vmHypervisor:false, agentType:ComputeServerType.AgentType.guest, guestVm:true,
+				provisionTypeCode:'hyperv'
+		)
+		serverTypes << new ComputeServerType(code:'hypervWindowsVm', name:'Hyper-V Windows VM', description:'', platform:PlatformType.windows,
+				nodeType:'morpheus-windows-vm-node', enabled:true, selectable:false, externalDelete:true, managed:true, controlPower:true,
+				controlSuspend:false, creatable:false, computeService:'hypervComputeService', displayOrder: 0, hasAutomation:true,
+				reconfigureSupported:true, containerHypervisor:false, bareMetalHost:false, vmHypervisor:false,
+				agentType: ComputeServerType.AgentType.guest, guestVm:true, provisionTypeCode:'hyperv'
+		)
+		serverTypes << new ComputeServerType(code:'hypervUnmanaged', name:'Hyper-V Instance', description:'hyper-v vm', platform:PlatformType.linux,
+				nodeType:'unmanaged', enabled:true, selectable:false, externalDelete:true, managed:false, controlPower:true, controlSuspend:false,
+				creatable:false, computeService:'hypervComputeService', displayOrder:99, hasAutomation:false, containerHypervisor:false,
+				bareMetalHost:false, vmHypervisor:false, agentType: ComputeServerType.AgentType.guest, managedServerType:'hypervVm',
+				guestVm:true, provisionTypeCode:'hyperv'
+		)
+
+		//windows container host - not used
+		serverTypes << new ComputeServerType(code:'hypervWindows', name:'Hyper-V Windows Host', description:'', platform:PlatformType.windows,
+				nodeType:'morpheus-windows-node', enabled:true, selectable:false, externalDelete:true, managed:true, controlPower:true,
+				controlSuspend:false, creatable:true, computeService:'hypervComputeService', displayOrder:7, hasAutomation:true, reconfigureSupported:true,
+				containerHypervisor:false, bareMetalHost:false, vmHypervisor:false, agentType: ComputeServerType.AgentType.node, guestVm:true,
+				provisionTypeCode:'hyperv'
+		)
+
+		//docker
+		serverTypes << new ComputeServerType(code:'hypervLinux', name:'Hyper-V Docker Host', description:'', platform:PlatformType.linux,
+				nodeType:'morpheus-node', enabled:true, selectable:false, externalDelete:true, managed:true, controlPower:true, controlSuspend:false,
+				creatable:false, computeService:'hypervComputeService', displayOrder: 6, hasAutomation:true, reconfigureSupported:true,
+				containerHypervisor:true, bareMetalHost:false, vmHypervisor:false, agentType:ComputeServerType.AgentType.node, containerEngine:'docker', provisionTypeCode:'hyperv',
+				computeTypeCode:'docker-host',
+				optionTypes:[hostOptionType]
+		)
+
+		//kubernetes
+		serverTypes << new ComputeServerType(code:'hypervKubeMaster', name:'Hyper-V Kubernetes Master', description:'', platform:PlatformType.linux,
+				nodeType:'kube-master', reconfigureSupported: true, enabled:true, selectable:false, externalDelete:true, managed:true,
+				controlPower:true, controlSuspend:true, creatable:true, supportsConsoleKeymap: true,
+				displayOrder:10, hasAutomation:true, containerHypervisor:true, bareMetalHost:false, vmHypervisor:false,
+				agentType: ComputeServerType.AgentType.host, containerEngine:'docker',
+				provisionTypeCode:'hyperv', computeTypeCode:'kube-master',
+				optionTypes:[hostOptionType]
+		)
+		serverTypes << new ComputeServerType(code:'hypervKubeWorker', name:'Hyper-V Kubernetes Worker', description:'', platform:PlatformType.linux,
+				nodeType:'kube-worker', reconfigureSupported: true, enabled:true, selectable:false, externalDelete:true, managed:true, controlPower:true,
+				controlSuspend:true, creatable:true, supportsConsoleKeymap: true, computeService:'hypervComputeService', displayOrder:10, hasAutomation:true,
+				containerHypervisor:true, bareMetalHost:false, vmHypervisor:false, agentType:ComputeServerType.AgentType.guest, containerEngine:'docker',
+				provisionTypeCode:'hyperv', computeTypeCode:'kube-worker',
+				optionTypes:[hostOptionType]
+		)
+
 		return serverTypes
 	}
 
@@ -175,7 +399,33 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	ServiceResponse initializeCloud(Cloud cloudInfo) {
-		return ServiceResponse.success()
+		log.debug ('initializing cloud: {}', cloudInfo.code)
+		ServiceResponse rtn = ServiceResponse.prepare()
+		try {
+			if(cloudInfo) {
+				if(cloudInfo.enabled == true) {
+					def initResults = initializeHypervisor(cloudInfo)
+					log.debug("initResults: {}", initResults)
+					if(initResults.success == true) {
+					// TODO: below methods should be enebled after implementing it.
+//						refresh(cloudInfo)
+//						refreshDaily(cloudInfo)
+						rtn.success = true
+					}
+				}
+			} else {
+				rtn.msg = 'No zone found'
+			}
+		} catch(e) {
+			log.error("initialize cloud error: {}",e)
+		}
+		return rtn
+	}
+
+	// TODO: Below method would be implemented later by taking reference from embedded code. we have separate story to work on this
+	def initializeHypervisor(cloud) {
+		def rtn = [success:true]
+		return rtn
 	}
 
 	/**
@@ -368,6 +618,11 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	Boolean hasComputeZonePools() {
+		return false
+	}
+
+	@Override
+	Boolean provisionRequiresResourcePool() {
 		return false
 	}
 
