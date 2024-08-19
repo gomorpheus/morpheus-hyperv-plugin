@@ -5,20 +5,7 @@ import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.providers.CloudProvider
 import com.morpheusdata.core.providers.ProvisionProvider
 import com.morpheusdata.hyperv.utils.HypervOptsUtility
-import com.morpheusdata.model.BackupProvider
-import com.morpheusdata.model.Cloud
-import com.morpheusdata.model.CloudFolder
-import com.morpheusdata.model.CloudPool
-import com.morpheusdata.model.ComputeServer
-import com.morpheusdata.model.ComputeServerType
-import com.morpheusdata.model.Datastore
-import com.morpheusdata.model.Icon
-import com.morpheusdata.model.Network
-import com.morpheusdata.model.NetworkSubnetType
-import com.morpheusdata.model.NetworkType
-import com.morpheusdata.model.OptionType
-import com.morpheusdata.model.StorageControllerType
-import com.morpheusdata.model.StorageVolumeType
+import com.morpheusdata.model.*
 import com.morpheusdata.request.ValidateCloudRequest
 import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
@@ -159,45 +146,38 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	ServiceResponse validate(Cloud cloud, ValidateCloudRequest validateCloudRequest) {
-		log.info("Ray :: validate: cloud: ${cloud}")
-		log.info("Ray :: validate: validateCloudRequest: ${validateCloudRequest}")
-		log.info("validateZone: ${cloud}")
-		def rtn = [success:false, zone:cloud, errors:[:]]
+		log.debug("validate: cloud: {}, validateCloudRequest: {}", cloud, validateCloudRequest)
+		def rtn = [success: false, zone: cloud, errors: [:]]
 		try {
-			log.info("Ray :: validate: cloud?.id: ${cloud?.id}")
-			if(cloud) {
-				def  requiredFields = ['host', 'workingPath', 'vmPath', 'diskPath']
-				log.info("Ray :: validate: requiredFields: ${requiredFields}")
+			if (cloud) {
+				def requiredFields = ['host', 'workingPath', 'vmPath', 'diskPath']
 				def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, cloud)
-				log.info("Ray :: validate: hypervOpts: ${hypervOpts}")
 				def cloudConfig = cloud.getConfigMap()
-				log.info("Ray :: validate: cloudConfig: ${cloudConfig}")
 				rtn.errors = validateRequiredConfigFields(requiredFields, cloudConfig)
-				log.info("Ray :: validate: rtn.errors: ${rtn.errors}")
-				def credential = context.async.accountCredential.loadCredentialConfig(opts.credential, cloudConfig).blockingGet()
-				log.info("Ray :: validate: credential: ${credential}")
-				log.info("Ray :: validate: credential.data: ${credential.data}")
-				log.info("Ray :: validate: credential.data?.username: ${credential.data?.username}")
-				log.info("Ray :: validate: credential.data?.password: ${credential.data?.password}")
-				if(!credential.data?.username) {
+				if (!validateCloudRequest?.credentialUsername) {
 					rtn.msg = 'Enter a username'
 					rtn.errors.username = rtn.msg
-				} else if(!credential.data?.password) {
+				} else if (!validateCloudRequest?.credentialPassword) {
 					rtn.msg = 'Enter your password'
 					rtn.errors.password = rtn.msg
 				}
-				log.info("Ray :: validate: rtn.errors.size(): ${rtn.errors.size()}")
-				if(rtn.errors.size() == 0) {
-					log.info("Ray :: validate: cloud.enabled: ${cloud.enabled}")
-					if(cloud.enabled == true) {
-						hypervOpts += [hypervisor:[:], sshHost:cloudConfig.host, sshUsername:credential.data.username,
-									   sshPassword:credential.data.password, zoneRoot:cloudConfig.workingPath, diskRoot:cloudConfig.diskPath, vmRoot:cloudConfig.vmPath]
-						log.info("Ray :: validate: hypervOpts: ${hypervOpts}")
-						def vmSwitches = apiService.listVmSwitches(hypervOpts)
-						log.info("Ray :: validate: vmSwitches: ${vmSwitches}")
-						if(vmSwitches.success == true)
+				if (rtn.errors.size() == 0) {
+					if (cloud.enabled == true) {
+						def opts = [
+								hypervisor : [:],
+								sshHost    : cloudConfig.hypervHost,
+								sshPort    : cloudConfig.winrmPort,
+								sshUsername: validateCloudRequest?.credentialUsername,
+								sshPassword: validateCloudRequest?.credentialPassword,
+								zoneRoot   : cloudConfig.workingPath,
+								diskRoot   : cloudConfig.diskPath,
+								vmRoot     : cloudConfig.vmPath
+						]
+						def vmSwitches = apiService.listVmSwitches(hypervOpts, opts)
+						log.debug("validate: vmSwitches: ${vmSwitches}")
+						if (vmSwitches.success == true)
 							rtn.success = true
-						if(rtn.success == false)
+						if (rtn.success == false)
 							rtn.msg = 'Error connecting to hyper-v'
 					} else {
 						rtn.success = true
@@ -208,22 +188,10 @@ class HyperVCloudProvider implements CloudProvider {
 			} else {
 				rtn.message = 'No zone found'
 			}
-		} catch(e) {
-			log.error("Ray :: validation: An Exception Has Occurred",e)
+		} catch (e) {
+			log.error("validation: An Exception Has Occurred", e)
 		}
-		log.info("Ray :: validate: rtn: ${rtn}")
 		return ServiceResponse.create(rtn)
-	}
-
-	def validateRequiredConfigFields(fieldArray, config) {
-		def errors = [:]
-		fieldArray.each {field ->
-			if(config[field] != null && config[field]?.size() == 0) {
-				def display = field.replaceAll( /([A-Z])/, / $1/ ).toLowerCase()
-				errors[field] = "Enter a ${display}"
-			}
-		}
-		return errors
 	}
 
 	/**
@@ -424,5 +392,16 @@ class HyperVCloudProvider implements CloudProvider {
 	@Override
 	String getName() {
 		return 'Hyper-V'
+	}
+
+	def validateRequiredConfigFields(fieldArray, config) {
+		def errors = [:]
+		fieldArray.each { field ->
+			if (config[field] != null && config[field]?.size() == 0) {
+				def display = field.replaceAll(/([A-Z])/, / $1/).toLowerCase()
+				errors[field] = "Enter a ${display}"
+			}
+		}
+		return errors
 	}
 }

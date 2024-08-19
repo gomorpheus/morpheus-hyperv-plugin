@@ -21,13 +21,7 @@ class HyperVApiService {
     static defaultRoot = 'C:\\morpheus'
 
     def executeCommand(command, opts) {
-        log.info("Ray :: apiService: executeCommand: command: ${command}")
-        log.info("Ray :: apiService: executeCommand: opts.sshHost: ${opts.sshHost}")
-        log.info("Ray :: apiService: executeCommand: opts.sshPort: ${opts.sshPort}")
-        log.info("Ray :: apiService: executeCommand: opts.username: ${opts.username}")
-        log.info("Ray :: apiService: executeCommand: opts.password: ${opts.password}")
-        def output = morpheusContext.executeWindowsCommand(opts.sshHost, opts.sshPort, opts.username, opts.password, command, null, false).blockingGet()
-        log.info("Ray :: apiService: executeCommand: output: ${output}")
+        def output = morpheusContext.executeWindowsCommand(opts.sshHost, opts.sshPort?.toInteger(), opts.sshUsername, opts.sshPassword, command, null, false).blockingGet()
         return output
     }
 
@@ -478,20 +472,16 @@ class HyperVApiService {
 
     }
 
-    def listVmSwitches(opts) {
-        log.info("Ray :: listVmSwitches: opts: ${opts}")
-        log.debug "listVmSwitches opts: ${opts}"
+    def listVmSwitches(hypervOpts, opts) {
+        log.debug ("listVmSwitches hypervOpts: {}, opts: {}", hypervOpts, opts)
         def rtn = [success: false, bridgeList: []]
         def command = 'Get-VMSwitch | Format-Table'
-        log.info("Ray :: listVmSwitches: command: ${command}")
+        log.debug("listVmSwitches: command: ${command}")
         def results = executeCommand(command, opts)
-        log.info("Ray :: listVmSwitches: results: ${results}")
-        log.debug("results: ${results}")
+        log.debug("listVmSwitches: results: ${results}")
         rtn.vmSwitchList = parseVmSwitchList(results.data)
-        log.info("Ray :: listVmSwitches: rtn.vmSwitchList: ${rtn.vmSwitchList}")
         log.debug "vmSwitchList?.size(): ${rtn.vmSwitchList?.size()}"
         rtn.success = results.success
-        log.info("Ray :: listVmSwitches: rtn: ${rtn}")
         return rtn
     }
 
@@ -908,14 +898,10 @@ class HyperVApiService {
     def parseVmSwitchList(data) {
         def rtn = []
         def lines = data?.tokenize('\n')
-        log.info("Ray :: parseVmSwitchList: lines: ${lines}")
         lines = lines?.findAll { it.length() > 1 }
         log.debug("lines: ${lines}")
-        log.info("Ray :: parseVmSwitchList: lines1: ${lines}")
-        log.info("Ray :: parseVmSwitchList: lines?.size(): ${lines?.size()}")
         if (lines?.size() > 1) {
             def headerMap = parseHypervHeader(lines[1])
-            log.info("Ray :: parseVmSwitchList: headerMap: ${headerMap}")
             if (headerMap?.count > 2) {
                 lines.eachWithIndex { line, index ->
                     if (index > 1) {
@@ -938,7 +924,6 @@ class HyperVApiService {
             }
             log.debug("vmSwitchList: ${rtn}")
         }
-        log.info("Ray :: parseVmSwitchList: rtn: ${rtn}")
         return rtn
     }
 
