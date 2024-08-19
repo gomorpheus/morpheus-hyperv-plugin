@@ -3,10 +3,14 @@ buildscript {
         mavenLocal()
         mavenCentral()
         maven { url "https://plugins.gradle.org/m2/" }
+		maven { url "https://nexus.bertramlabs.com/content/repositories/snapshots" }
+		maven { url "https://nexus.bertramlabs.com/content/repositories/releases" }
+		maven { url "https://nexus.bertramlabs.com/content/repositories/publicReleases" }
     }
     dependencies {
         classpath "com.github.johnrengelman:shadow:8.1.1"
-        classpath "com.morpheusdata:morpheus-plugin-gradle:$morpheusApiVersion"
+//        classpath "com.morpheusdata:morpheus-plugin-gradle:$morpheusApiVersion"
+		classpath "com.morpheusdata:morpheus-plugin-gradle:$morpheusGradleVersion"
         classpath "com.bertramlabs.plugins:asset-pipeline-gradle:$assetPipelineVersion"
     }
 }
@@ -31,6 +35,9 @@ java {
 repositories {
 	mavenLocal()
 	mavenCentral()
+	maven { url "https://nexus.bertramlabs.com/content/repositories/snapshots" }
+	maven { url "https://nexus.bertramlabs.com/content/repositories/releases" }
+	maven { url "https://nexus.bertramlabs.com/content/repositories/publicReleases" }
 }
 
 configurations {
@@ -77,9 +84,9 @@ jar {
 				'Morpheus-Name': 'Hyper-V',
 				'Morpheus-Organization': 'morpheus',
 				'Morpheus-Code': 'morpheus-hyperv-plugin',
-				'Morpheus-Description': 'TODO: Fill in the Plugin Description',
-				'Morpheus-Logo': 'assets/morpheus.svg',
-				'Morpheus-Logo-Dark': 'assets/morpheus.svg',
+				'Morpheus-Description': 'Plugin for Hyper-V',
+				'Morpheus-Logo': 'assets/hyperv.svg',
+				'Morpheus-Logo-Dark': 'assets/hyperv.svg',
 				'Morpheus-Labels': 'Plugin',
 				'Morpheus-Repo': 'https://github.com/gomorpheus/example',
 				'Morpheus-Min-Appliance-Version': "6.3.0"
