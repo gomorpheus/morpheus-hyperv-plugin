@@ -472,12 +472,13 @@ class HyperVApiService {
 
     }
 
-    def listVmSwitches(opts) {
-        log.debug "listVmSwitches opts: ${opts}"
+    def listVmSwitches(hypervOpts, opts) {
+        log.debug ("listVmSwitches hypervOpts: {}, opts: {}", hypervOpts, opts)
         def rtn = [success: false, bridgeList: []]
         def command = 'Get-VMSwitch | Format-Table'
+        log.debug("listVmSwitches: command: ${command}")
         def results = executeCommand(command, opts)
-        log.debug("results: ${results}")
+        log.debug("listVmSwitches: results: ${results}")
         rtn.vmSwitchList = parseVmSwitchList(results.data)
         log.debug "vmSwitchList?.size(): ${rtn.vmSwitchList?.size()}"
         rtn.success = results.success

@@ -369,8 +369,53 @@ class HyperVCloudProvider implements CloudProvider {
 	 * @return ServiceResponse
 	 */
 	@Override
-	ServiceResponse validate(Cloud cloudInfo, ValidateCloudRequest validateCloudRequest) {
-		return ServiceResponse.success()
+	ServiceResponse validate(Cloud cloud, ValidateCloudRequest validateCloudRequest) {
+		log.debug("validate: cloud: {}, validateCloudRequest: {}", cloud, validateCloudRequest)
+		def rtn = [success: false, zone: cloud, errors: [:]]
+		try {
+			if (cloud) {
+				def requiredFields = ['host', 'workingPath', 'vmPath', 'diskPath']
+				def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, cloud)
+				def cloudConfig = cloud.getConfigMap()
+				rtn.errors = validateRequiredConfigFields(requiredFields, cloudConfig)
+				if (!validateCloudRequest?.credentialUsername) {
+					rtn.msg = 'Enter a username'
+					rtn.errors.username = rtn.msg
+				} else if (!validateCloudRequest?.credentialPassword) {
+					rtn.msg = 'Enter your password'
+					rtn.errors.password = rtn.msg
+				}
+				if (rtn.errors.size() == 0) {
+					if (cloud.enabled == true) {
+						def opts = [
+								hypervisor : [:],
+								sshHost    : cloudConfig.hypervHost,
+								sshPort    : cloudConfig.winrmPort,
+								sshUsername: validateCloudRequest?.credentialUsername,
+								sshPassword: validateCloudRequest?.credentialPassword,
+								zoneRoot   : cloudConfig.workingPath,
+								diskRoot   : cloudConfig.diskPath,
+								vmRoot     : cloudConfig.vmPath
+						]
+						def vmSwitches = apiService.listVmSwitches(hypervOpts, opts)
+						log.debug("validate: vmSwitches: ${vmSwitches}")
+						if (vmSwitches.success == true)
+							rtn.success = true
+						if (rtn.success == false)
+							rtn.msg = 'Error connecting to hyper-v'
+					} else {
+						rtn.success = true
+					}
+				} else {
+					rtn.msg = 'Invalid configuration'
+				}
+			} else {
+				rtn.message = 'No zone found'
+			}
+		} catch (e) {
+			log.error("validation: An Exception Has Occurred", e)
+		}
+		return ServiceResponse.create(rtn)
 	}
 
 	/**
@@ -773,5 +818,16 @@ class HyperVCloudProvider implements CloudProvider {
 			log.debug("listVirtualMachines error: ${e}", e)
 		}
 		return rtn
+  }
+  
+	def validateRequiredConfigFields(fieldArray, config) {
+		def errors = [:]
+		fieldArray.each { field ->
+			if (config[field] != null && config[field]?.size() == 0) {
+				def display = field.replaceAll(/([A-Z])/, / $1/).toLowerCase()
+				errors[field] = "Enter a ${display}"
+			}
+		}
+		return errors
 	}
 }
