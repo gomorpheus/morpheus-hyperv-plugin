@@ -490,13 +490,16 @@ class HyperVCloudProvider implements CloudProvider {
 						def hostResults = loadHypervHost([zone: cloud], hypervisor)
 						if (hostResults.success == true && hostResults.host && hostResults.host['ComputerName']) {
 							resolveUniqueIdsToVMids([zone: cloud], hypervisor)
-							def cacheResults = refreshCache([zone: cloud], hypervisor)
-							log.debug ("cacheResults : ${cacheResults}")
-							virtualMachineList += cacheResults.virtualMachines
+							def results = listVirtualMachines(hypervOpts)
+							log.debug ("cacheResults : ${results}")
+							virtualMachineList += results.virtualMachines
 							log.debug ("virtualMachineList.size(): ${virtualMachineList.size()}")
-							if (cacheResults.success == true) {
-								allOnline = cacheResults.success && allOnline
-								anyOnline = cacheResults.success || anyOnline
+							if (results.success == true) {
+								// TODO: cacheNetworks need to be implemented with cacheNetowork user story
+								//rtn.success = cacheNetworks(opts, node).success
+
+								allOnline = results.success && allOnline
+								anyOnline = results.success || anyOnline
 								updateHypervisorStatus(hypervisor, 'provisioned', 'on', '')
 								context.services.operationNotification.clearHypervisorAlarm(hypervisor)
 							} else {
@@ -731,18 +734,6 @@ class HyperVCloudProvider implements CloudProvider {
 		}
 	}
 
-	private Map refreshCache(opts, node) {
-		log.debug ("refreshCache: opts: ${opts}")
-		def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, opts.zone)
-		hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
-		Map rtn = listVirtualMachines(hypervOpts)
-		if (rtn.success) {
-			// TODO: cacheNetworks need to be implemented with cacheNetowork user story
-			//rtn.success = cacheNetworks(opts, node).success
-		}
-		return rtn
-	}
-
 	def getHypervHypervisors(Cloud cloud) {
 		def rtn = context.services.computeServer.list(new DataQuery().withFilter("zone", cloud).withFilter("computeServerType.code", "hypervHypervisor"))
 		return rtn
@@ -811,7 +802,7 @@ class HyperVCloudProvider implements CloudProvider {
 	}
 
 	def listVirtualMachines(opts) {
-		def rtn = [success: false, networks: []]
+		def rtn = [success: false]
 		try {
 			rtn = apiService.listVirtualMachines(opts)
 		} catch (e) {
