@@ -3,6 +3,7 @@ package com.morpheusdata.hyperv.utils
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.data.DataQuery
 import com.morpheusdata.hyperv.HyperVApiService
+import com.morpheusdata.model.Cloud
 import groovy.util.logging.Slf4j
 
 /**
@@ -83,5 +84,22 @@ class HypervOptsUtility {
         def zoneRoot = serverConfig.workingPath?.length() > 0 ? serverConfig.workingPath : '$HOME/morpheus'
         return [hypervisorConfig:serverConfig, hypervisor:hypervisor, sshHost:hypervisor.sshHost, sshUsername:hypervisor.sshUsername,
                 sshPassword:hypervisor.sshPassword, zoneRoot:zoneRoot, diskRoot:diskRoot, vmRoot:vmRoot]
+    }
+
+    static getHypervInitializationOpts(zone) {
+        def zoneConfig = zone.getConfigMap()
+        def vmRoot = zoneConfig.vmPath?.length() > 0 ? zoneConfig.vmPath : HyperVApiService.defaultRoot + '\\VMs'
+        def diskRoot = zoneConfig.diskPath?.length() > 0 ? zoneConfig.diskPath : HyperVApiService.defaultRoot + '\\Disks'
+        def zoneRoot = zoneConfig.workingPath?.length() > 0 ? zoneConfig.workingPath : HyperVApiService.defaultRoot
+        return [sshHost:zoneConfig.hypervHost, sshPort: zoneConfig.winrmPort ? zoneConfig.winrmPort.toInteger() : null, sshUsername:getUsername(zone), sshPassword:getPassword(zone), zoneRoot:zoneRoot,
+                diskRoot:diskRoot, vmRoot:vmRoot]
+    }
+
+    static getUsername(zone) {
+        zone.accountCredentialData?.username ?: zone.getConfigProperty('username')
+    }
+
+    static getPassword(zone) {
+        zone.accountCredentialData?.password ?: zone.getConfigProperty('password')
     }
 }

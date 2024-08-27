@@ -426,16 +426,24 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	ServiceResponse initializeCloud(Cloud cloudInfo) {
+		log.info ("Ray :: initializeCloud: cloud: ${cloudInfo}")
+		log.info ("Ray :: initializeCloud: cloudInfo?.id: ${cloudInfo?.id}")
 		log.debug ('initializing cloud: {}', cloudInfo.code)
+
 		ServiceResponse rtn = ServiceResponse.prepare()
 		try {
 			if(cloudInfo) {
+				log.info ("Ray :: initializeCloud: cloudInfo.enabled: ${cloudInfo.enabled}")
 				if(cloudInfo.enabled == true) {
+
+					log.info ("Ray :: initializeCloud: before calling initializeHypervisor")
 					def initResults = initializeHypervisor(cloudInfo)
+					log.info ("Ray :: initializeCloud: initResults: ${initResults}")
 					log.debug("initResults: {}", initResults)
+					log.info ("Ray :: initializeCloud: after calling initializeHypervisor")
 					if(initResults.success == true) {
 					// TODO: below methods should be enebled after implementing it.
-//						refresh(cloudInfo)
+						refresh(cloudInfo)
 //						refreshDaily(cloudInfo)
 						rtn.success = true
 					}
@@ -451,7 +459,100 @@ class HyperVCloudProvider implements CloudProvider {
 
 	// TODO: Below method would be implemented later by taking reference from embedded code. we have separate story to work on this
 	def initializeHypervisor(cloud) {
-		def rtn = [success:true]
+		def rtn = [success:false]
+
+		log.info ("Ray :: initializeHypervisor-cloud: cloud: ${cloud}")
+		log.info ("Ray :: initializeHypervisor-cloud: cloud?.id: ${cloud?.id}")
+		ComputeServer newServer
+		def opts = HypervOptsUtility.getHypervInitializationOpts(cloud)
+		log.info ("Ray :: initializeHypervisor-cloud: opts: ${opts}")
+		def serverInfo = apiService.getHypervServerInfo(opts)
+		log.info ("Ray :: initializeHypervisor-cloud: serverInfo: ${serverInfo}")
+		log.info ("Ray :: initializeHypervisor-cloud: serverInfo.success: ${serverInfo.success}")
+		log.info ("Ray :: initializeHypervisor-cloud: serverInfo.hostname: ${serverInfo.hostname}")
+		if(serverInfo.success == true && serverInfo.hostname) {
+			def cloudConfig = cloud.getConfigMap()
+			log.info ("Ray :: initializeHypervisor-cloud: cloudConfig: ${cloudConfig}")
+			//def ipAddress = cloud.getConfigProperty('host')
+			def ipAddress = cloud.getConfigProperty('hypervHost')
+			log.info ("Ray :: initializeHypervisor-cloud: ipAddress: ${ipAddress}")
+			def serverType = context.async.cloud.findComputeServerTypeByCode("hypervHypervisor").blockingGet()
+			log.info ("Ray :: initializeHypervisor-cloud: serverType: ${serverType}")
+			log.info ("Ray :: initializeHypervisor-cloud: serverType?.id: ${serverType?.id}")
+			log.info ("Ray :: initializeHypervisor-cloud: serverType?.name: ${serverType?.name}")
+			log.info ("Ray :: initializeHypervisor-cloud: serverType?.code: ${serverType?.code}")
+			newServer = findHypervHypervisor(cloud, serverInfo.hostname, ipAddress, serverType)
+			log.info ("Ray :: initializeHypervisor-cloud: newServer: ${newServer}")
+			log.info ("Ray :: initializeHypervisor-cloud: newServer?.id: ${newServer?.id}")
+			log.info ("Ray :: initializeHypervisor-cloud: newServer?.name: ${newServer?.name}")
+			log.info ("Ray :: initializeHypervisor-cloud: newServer?.status: ${newServer?.status}")
+			if(!newServer) {
+				newServer = new ComputeServer()
+				newServer.account = cloud.account
+				newServer.cloud = cloud
+				newServer.computeServerType = serverType
+				newServer.serverOs = new OsType(code: 'windows.server.2012')
+				newServer.name = serverInfo.hostname
+				newServer = context.services.computeServer.create(newServer)
+			}
+			log.info ("Ray :: initializeHypervisor-cloud: newServer1: ${newServer}")
+			log.info ("Ray :: initializeHypervisor-cloud: newServer?.id1: ${newServer?.id}")
+			log.info ("Ray :: initializeHypervisor-cloud: newServer?.name1: ${newServer?.name}")
+			log.info ("Ray :: initializeHypervisor-cloud: newServer?.status1: ${newServer?.status}")
+			if(serverInfo.hostname) {
+				newServer.hostname = serverInfo.hostname
+			}
+			log.info ("Ray :: initializeHypervisor-cloud: cloud-host: ${cloud.getConfigProperty('host')}")
+			newServer.sshHost = cloud.getConfigProperty('hypervHost')
+			def sshPort = cloud.getConfigProperty('winrmPort') ? cloud.getConfigProperty('winrmPort').toInteger() : 5985
+			log.info ("Ray :: initializeHypervisor-cloud: cloud-sshPort: ${sshPort}")
+			//newServer.sshPort = sshPort
+			newServer.internalIp = newServer.sshHost
+			newServer.externalIp = newServer.sshHost
+			newServer.sshUsername = HypervOptsUtility.getUsername(cloud)
+			newServer.sshPassword = HypervOptsUtility.getPassword(cloud)
+			newServer.setConfigProperty('workingPath', cloud.getConfigProperty('workingPath'))
+			newServer.setConfigProperty('vmPath', cloud.getConfigProperty('vmPath'))
+			newServer.setConfigProperty('diskPath', cloud.getConfigProperty('diskPath'))
+			log.info ("Ray :: initializeHypervisor-cloud: newServer.sshUsername: ${newServer.sshUsername}")
+			log.info ("Ray :: initializeHypervisor-cloud: newServer.sshPassword: ${newServer.sshPassword}")
+		}
+		// initializeHypervisor from context
+		log.info ("Ray :: initializeHypervisor-cloud: newServer2: ${newServer}")
+		log.info ("Ray :: initializeHypervisor-cloud: newServer?.id2: ${newServer?.id}")
+		log.info ("Ray :: initializeHypervisor-cloud: newServer?.name2: ${newServer?.name}")
+		log.info ("Ray :: initializeHypervisor-cloud: newServer?.status2: ${newServer?.status}")
+		log.info ("Ray :: initializeHypervisor-cloud: newServer?.externalIp: ${newServer?.externalIp}")
+		log.info ("Ray :: initializeHypervisor-cloud: newServer?.internalIp: ${newServer?.internalIp}")
+		context.services.computeServer.save(newServer)
+		if (newServer) {
+			context.async.hypervisorService.initialize(newServer)
+			rtn.success = true
+		}
+		log.info ("Ray :: initializeHypervisor-cloud: rtn: ${rtn}")
+		return rtn
+
+	}
+
+	def findHypervHypervisor(Cloud cloud, String name, String ipAddress, ComputeServerType serverType) {
+		log.info("Ray :: findHypervHypervisor: name: ${name}")
+		log.info("Ray :: findHypervHypervisor: ipAddress: ${ipAddress}")
+		log.info("Ray :: findHypervHypervisor: serverType: ${serverType}")
+		def rtn = context.services.computeServer.find(new DataQuery()
+				.withFilter('zone.id', cloud.id.toLong())
+				.withFilter('computeServerType', serverType)
+				.withFilter('internalIp', ipAddress))
+		if(!rtn) {
+			rtn = context.services.computeServer.find(new DataQuery().withFilters(
+					new DataFilter('zone.id', cloud.id.toLong()),
+					new DataFilter('computeServerType', serverType),
+					new DataOrFilter(
+							new DataFilter('hostname', name),
+							new DataFilter('name', name)
+					)
+			))
+		}
+		log.info("Ray :: findHypervHypervisor: rtn: ${rtn}")
 		return rtn
 	}
 
@@ -466,33 +567,55 @@ class HyperVCloudProvider implements CloudProvider {
 	@Override
 	ServiceResponse refresh(Cloud cloud) {
 		log.debug("refreshZone:${cloud}")
+		log.info("Ray :: refresh: cloud: ${cloud}")
+		log.info("Ray :: refresh: cloud?.id: ${cloud?.id}")
 		ServiceResponse response = ServiceResponse.prepare()
 		try {
 			def syncDate = new Date()
+			log.info("Ray :: refresh: syncDate: ${syncDate}")
 			def hypervisorList = getHypervHypervisors(cloud)
+			log.info("Ray :: refresh: hypervisorList: ${hypervisorList}")
+			log.info("Ray :: refresh: hypervisorList?.size(): ${hypervisorList?.size()}")
 			log.debug ("hypervisorList?.size(): ${hypervisorList?.size()}")
 			def virtualMachineList = []
 			def allOnline = true
 			def anyOnline = false
 			for (hypervisor in hypervisorList) {
+				log.info("Ray :: refresh: hypervisor?.status: ${hypervisor?.status}")
+				log.info("Ray :: refresh: hypervisor?.name: ${hypervisor?.name}")
+				log.info("Ray :: refresh: hypervisor?.id: ${hypervisor?.id}")
 				if (hypervisor.status == 'pending' || hypervisor.status == 'pendingDeleteApproval') {
 					continue
 				}
+				log.info("Ray :: refresh: hypervisor.enabled: ${hypervisor.enabled}")
 				if (hypervisor.enabled == true) {
 					def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, cloud)
-					hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(hypervisor)
-					def hostOnline = ConnectionUtils.testHostConnectivity(hypervOpts.sshHost, 5985, false, true, null)
+					log.info("Ray :: refresh: hypervOpts: ${hypervOpts}")
+					def hypervHypervisorOpts = HypervOptsUtility.getHypervHypervisorOpts(hypervisor)
+					log.info("Ray :: refresh: hypervHypervisorOpts: ${hypervHypervisorOpts}")
+					log.info("Ray :: refresh: hypervHypervisorOpts.sshHost: ${hypervHypervisorOpts.sshHost}")
+					def concatOpts = hypervOpts + hypervHypervisorOpts
+					log.info("Ray :: refresh: concatOpts: ${concatOpts}")
+					def hostOnline = ConnectionUtils.testHostConnectivity(hypervHypervisorOpts.sshHost, 5985, false, true, null)
 					log.debug ("hostOnline: ${hostOnline}")
+					log.info("Ray :: refresh: hostOnline: ${hostOnline}")
 					if (hostOnline) {
 						allOnline = hostOnline && allOnline
 						anyOnline = hostOnline || anyOnline
+						log.info("Ray :: refresh: allOnline: ${allOnline}")
+						log.info("Ray :: refresh: anyOnline: ${anyOnline}")
 						//check if this host is online
 						def hostResults = loadHypervHost([zone: cloud], hypervisor)
-						if (hostResults.success == true && hostResults.host && hostResults.host['ComputerName']) {
+						log.info("Ray :: refresh: hostResults: ${hostResults}")
+						log.info("Ray :: refresh: hostResults?.host: ${hostResults?.host}")
+						if (hostResults.success == true && hostResults.host && hostResults?.host['ComputerName']) {
 							resolveUniqueIdsToVMids([zone: cloud], hypervisor)
-							def results = listVirtualMachines(hypervOpts)
+							def results = listVirtualMachines(hypervHypervisorOpts)
+							log.info("Ray :: refresh: results: ${results}")
 							log.debug ("cacheResults : ${results}")
 							virtualMachineList += results.virtualMachines
+							log.info("Ray :: refresh: virtualMachineList: ${virtualMachineList}")
+							log.info("Ray :: refresh: virtualMachineList?size(): ${virtualMachineList?.size()}")
 							log.debug ("virtualMachineList.size(): ${virtualMachineList.size()}")
 							if (results.success == true) {
 								// TODO: cacheNetworks need to be implemented with cacheNetowork user story
@@ -500,45 +623,63 @@ class HyperVCloudProvider implements CloudProvider {
 
 								allOnline = results.success && allOnline
 								anyOnline = results.success || anyOnline
+								log.info("Ray :: refresh: allOnline1: ${allOnline}")
+								log.info("Ray :: refresh: anyOnline1: ${anyOnline}")
 								updateHypervisorStatus(hypervisor, 'provisioned', 'on', '')
 								context.services.operationNotification.clearHypervisorAlarm(hypervisor)
+								log.info("Ray :: refresh: inside end of if")
 							} else {
 								updateHypervisorStatus(hypervisor, 'error', 'unknown', 'error connecting to hypervisor')
 								context.services.operationNotification.createHypervisorAlarm(hypervisor, 'error connecting to hypervisor')
+								log.info("Ray :: refresh: inside end of else")
 							}
 						} else {
 							updateHypervisorStatus(hypervisor, 'error', 'unknown', 'error connecting to hypervisor')
 							context.services.operationNotification.createHypervisorAlarm(hypervisor, 'error connecting to hypervisor')
 							allOnline = false
+							log.info("Ray :: refresh: inside end of else1")
 						}
 					} else {
 						updateHypervisorStatus(hypervisor, 'error', 'unknown', 'error connecting to hypervisor')
 						context.services.operationNotification.createHypervisorAlarm(hypervisor, 'error connecting to hypervisor')
 						allOnline = false
+						log.info("Ray :: refresh: inside end of else2")
 					}
 				} else {
 					context.services.operationNotification.clearHypervisorAlarm(hypervisor)
+					log.info("Ray :: refresh: inside end of else3")
 				}
 			}
+			log.info("Ray :: refresh: allOnline2: ${allOnline}")
+			log.info("Ray :: refresh: anyOnline2: ${anyOnline}")
 			if (anyOnline == true || allOnline == true) {
 				def vmCacheOpts = [zone: cloud]
 				def doInventory = cloud.getConfigProperty('importExisting')
+				log.info("Ray :: refresh: doInventory: ${doInventory}")
 				vmCacheOpts.createNew = (doInventory == 'on' || doInventory == 'true' || doInventory == true)
 				// TODO: cacheVirtualMachines need to be implemented with VM sync user story
 				// cacheVirtualMachines(vmCacheOpts, null, [virtualMachines: virtualMachineList, success: true])
 				response.success = true
+				log.info("Ray :: refresh: inside end of if1")
 			}
+			log.info("Ray :: refresh: allOnline3: ${allOnline}")
+			log.info("Ray :: refresh: anyOnline3: ${anyOnline}")
 			if (allOnline == true && anyOnline == true) {
-				context.async.cloud.updateCloudStatus(cloud, Cloud.Status.ok, null, syncDate) // check:
+				context.async.cloud.updateCloudStatus(cloud, Cloud.Status.ok, null, syncDate)
 				context.services.operationNotification.clearZoneAlarm(cloud)
+				log.info("Ray :: refresh: inside end of if2")
 			} else if (anyOnline == true) {
 				context.services.operationNotification.clearZoneAlarm(cloud)
+				log.info("Ray :: refresh: inside end of elseif")
 			} else {
 				context.services.operationNotification.createZoneAlarm(cloud, 'no hypervisors online')
+				log.info("Ray :: refresh: inside end of else last")
 			}
 		} catch (e) {
 			log.error("refresh zone error:${e}", e)
 		}
+		log.info("Ray :: refresh: response: ${response}")
+		log.info("Ray :: refresh: response?.success: ${response?.success}")
 		return response
 	}
 
@@ -725,6 +866,13 @@ class HyperVCloudProvider implements CloudProvider {
 
 	private updateHypervisorStatus(server, status, powerState, msg) {
 		log.debug ("server: {}, status: {}, powerState: {}, msg: {}", server, status, powerState, msg)
+		log.info("Ray :: updateHypervisorStatus: server: ${server}")
+		log.info("Ray :: updateHypervisorStatus: server?.id: ${server?.id}")
+		log.info("Ray :: updateHypervisorStatus: server?.name: ${server?.name}")
+		log.info("Ray :: updateHypervisorStatus: server?.status: ${server?.status}")
+		log.info("Ray :: updateHypervisorStatus: server?.powerState: ${server?.powerState}")
+		log.info("Ray :: updateHypervisorStatus: server?.statusMessage: ${server?.statusMessage}")
+		log.info("Ray :: updateHypervisorStatus: status: {}, powerState: {}, msg: {}", status, powerState, msg)
 		if (server.status != status || server.powerState != powerState) {
 			server.status = status
 			server.powerState = powerState
@@ -740,10 +888,16 @@ class HyperVCloudProvider implements CloudProvider {
 	}
 
 	def loadHypervHost(opts, node) {
+		log.info("Ray :: loadHypervHost: opts: ${opts}")
+		log.info("Ray :: loadHypervHost: node: ${node}")
+		log.info("Ray :: loadHypervHost: node?.id: ${node?.id}")
+		log.info("Ray :: loadHypervHost: node?.name: ${node?.name}")
 		def rtn = [success: false]
 		try {
 			def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, opts.zone)
+			log.info("Ray :: loadHypervHost: hypervOpts: ${hypervOpts}")
 			def hypervisorOpts = HypervOptsUtility.getHypervHypervisorOpts(node)
+			log.info("Ray :: loadHypervHost: hypervisorOpts: ${hypervisorOpts}")
 			//hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
 			hypervOpts.hypervisorConfig = hypervisorOpts.hypervisorConfig
 			hypervOpts.hypervisor = hypervisorOpts.hypervisor
@@ -755,7 +909,10 @@ class HyperVCloudProvider implements CloudProvider {
 			hypervOpts.vmRoot = hypervisorOpts.vmRoot
 			hypervOpts.sshPort = opts.zone.getConfigMap().winrmPort
 
+			log.info("Ray :: loadHypervHost: hypervOpts: ${hypervOpts}")
 			def hostResults = apiService.getHypervHost(hypervOpts)
+			log.info("Ray :: loadHypervHost: hostResults: ${hostResults}")
+			log.info("Ray :: loadHypervHost: hostResults?.host: ${hostResults?.host}")
 			log.debug ("hostResults: ${hostResults}")
 			if (hostResults.success == true) {
 				rtn.success = true
@@ -764,27 +921,40 @@ class HyperVCloudProvider implements CloudProvider {
 		} catch (e) {
 			log.error("loadHypervHost error:${e}", e)
 		}
+		log.info("Ray :: loadHypervHost: rtn: ${rtn}")
 		return rtn
 	}
 
 	private resolveUniqueIdsToVMids(Map opts, node) {
+		log.info("Ray :: resolveUniqueIdsToVMids: opts: ${opts}")
+		log.info("Ray :: resolveUniqueIdsToVMids: node: ${node}")
+		log.info("Ray :: resolveUniqueIdsToVMids: node?.id: ${node?.id}")
+		log.info("Ray :: resolveUniqueIdsToVMids: node?.name: ${node?.name}")
+		log.info("Ray :: resolveUniqueIdsToVMids: opts.zone?.id: ${opts.zone?.id}")
 		DataQuery query = new DatasetQuery().withFilters(
-				new DataFilter("zone", opts.zone),
+				new DataFilter("zone.id", opts.zone?.id),
 				new DataFilter("computeServerType.code", "hypervVm"),
 				new DataOrFilter(
 						new DataFilter('uniqueId', ''),
 						new DataFilter('uniqueId', null)
 				)
 		)
+		log.info("Ray :: resolveUniqueIdsToVMids: query: ${query}")
 		def hosts = context.services.computeServer.list(query)
+		log.info("Ray :: resolveUniqueIdsToVMids: hosts: ${hosts}")
+		log.info("Ray :: resolveUniqueIdsToVMids: hosts?.size(): ${hosts?.size()}")
 		log.debug ("hosts?.size(): ${hosts?.size()}")
 		if (hosts.size() < 1)
 			return
 		def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, opts.zone)
+		log.info("Ray :: resolveUniqueIdsToVMids: hypervOpts: ${hypervOpts}")
 		hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
+		log.info("Ray :: resolveUniqueIdsToVMids: hypervOpts1: ${hypervOpts}")
 		def listResults = listVirtualMachines(hypervOpts)
+		log.info("Ray :: resolveUniqueIdsToVMids: listResults: ${listResults}")
 		if (listResults.success == true) {
 			def remoteVms = listResults.virtualMachines
+			log.info("Ray :: resolveUniqueIdsToVMids: remoteVms: ${remoteVms}")
 			for (server in hosts) {
 				def match
 				for (remoteVm in remoteVms) {
@@ -802,12 +972,15 @@ class HyperVCloudProvider implements CloudProvider {
 	}
 
 	def listVirtualMachines(opts) {
+		log.info ("Ray :: listVirtualMachines: opts: ${opts}")
 		def rtn = [success: false]
 		try {
 			rtn = apiService.listVirtualMachines(opts)
+			log.info ("Ray :: listVirtualMachines: rtn: ${rtn}")
 		} catch (e) {
 			log.debug("listVirtualMachines error: ${e}", e)
 		}
+		log.info ("Ray :: listVirtualMachines: rtn last: ${rtn}")
 		return rtn
   }
   
