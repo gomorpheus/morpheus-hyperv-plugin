@@ -3,21 +3,10 @@ package com.morpheusdata.hyperv
 import com.morpheusdata.core.AbstractProvisionProvider
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
-import com.morpheusdata.core.data.DataFilter
-import com.morpheusdata.core.data.DataOrFilter
-import com.morpheusdata.core.data.DataQuery
 import com.morpheusdata.core.providers.ProvisionProvider
 import com.morpheusdata.core.providers.WorkloadProvisionProvider
 import com.morpheusdata.hyperv.utils.HypervOptsUtility
-import com.morpheusdata.model.Cloud
-import com.morpheusdata.model.ComputeServer
-import com.morpheusdata.model.ComputeServerType
-import com.morpheusdata.model.Icon
-import com.morpheusdata.model.OptionType
-import com.morpheusdata.model.OsType
-import com.morpheusdata.model.ServicePlan
-import com.morpheusdata.model.StorageVolumeType
-import com.morpheusdata.model.Workload
+import com.morpheusdata.model.*
 import com.morpheusdata.model.provisioning.WorkloadRequest
 import com.morpheusdata.response.InitializeHypervisorResponse
 import com.morpheusdata.response.PrepareWorkloadResponse
@@ -52,65 +41,32 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	ServiceResponse<InitializeHypervisorResponse> initializeHypervisor(Cloud cloud, ComputeServer server) {
-		log.info ("Ray :: initializeHypervisor: cloud: ${cloud}")
-		log.info ("Ray :: initializeHypervisor: cloud?.id: ${cloud?.id}")
-		log.info ("Ray :: initializeHypervisor: server: ${server}")
-		log.info ("Ray :: initializeHypervisor: server?.id: ${server?.id}")
-		log.info ("Ray :: initializeHypervisor: server?.name: ${server?.name}")
-		log.info ("Ray :: initializeHypervisor: server?.status: ${server?.status}")
-		log.info ("Ray :: initializeHypervisor: server?.powerState: ${server?.powerState}")
+		log.debug("initializeHypervisor: cloud: {}, server: {}", cloud, server)
 		ServiceResponse<InitializeHypervisorResponse> rtn = new ServiceResponse<>(new InitializeHypervisorResponse())
 		try {
 			def opts = HypervOptsUtility.getHypervHypervisorOpts(server)
-			log.info ("Ray :: initializeHypervisor: opts: ${opts}")
 			def serverInfo = apiService.getHypervServerInfo(opts)
-			log.info ("Ray :: initializeHypervisor: serverInfo: ${serverInfo}")
-			log.info ("Ray :: initializeHypervisor: serverInfo.success: ${serverInfo.success}")
-			log.info ("Ray :: initializeHypervisor: serverInfo.hostname: ${serverInfo.hostname}")
-			log.info ("Ray :: initializeHypervisor: server.hostname: ${server.hostname}")
-			if(serverInfo.success == true && serverInfo.hostname) {
+			log.debug("serverInfo: ${serverInfo}")
+			if (serverInfo.success == true && serverInfo.hostname) {
 				server.hostname = serverInfo.hostname
 			}
-			log.info ("Ray :: initializeHypervisor: server.hostname1: ${server.hostname}")
 			def maxStorage = serverInfo?.disks ? serverInfo?.disks.toLong() : 0
 			def maxMemory = serverInfo?.memory ? serverInfo?.memory.toLong() : 0
 			def usedStorage = 0
 			def maxCores = 1
-			log.info ("Ray :: initializeHypervisor: maxStorage: ${maxStorage}")
-			log.info ("Ray :: initializeHypervisor: maxMemory: ${maxMemory}")
 
 			rtn.data.serverOs = new OsType(code: 'windows.server.2012')
-			log.info ("Ray :: initializeHypervisor: rtn.data.serverOs: ${rtn.data.serverOs}")
-			//rtn.data.visibility = opts.zone.visibility
-			//rtn.data.platform = 'windows'
-			//rtn.data.platformVersion = '2012'
-			//rtn.data.statusDate = new Date()
-			//rtn.data.status = 'provisioning'
-			//rtn.data.powerState = 'on'
-			//rtn.data.serverType = 'hypervisor'
-			//rtn.data.osType = 'windows' //linux, windows, unmanaged
 			rtn.data.commType = 'winrm' //ssh, minrm
-			//newServer.save()
 			rtn.data.maxMemory = maxMemory
 			rtn.data.maxCores = maxCores
 			rtn.data.maxStorage = maxStorage
-			//newServer.capacityInfo = new ComputeCapacityInfo(server:newServer, maxCores:maxCores, maxMemory:maxMemory, maxStorage:maxStorage)
-			//newServer.capacityInfo.save()
-			//newServer.save(flush:true)
-			//log.debug("save new server:${newServer.errors} ${newServer.status}")
-			//rtn.server = newServer
 			rtn.success = true
-			//opts.server = newServer
-
-			log.info ("Ray :: initializeHypervisor: server.agentInstalled: ${server.agentInstalled}")
-			if(server.agentInstalled != true) {
+			if (server.agentInstalled != true) {
 				def prepareResults = apiService.prepareNode(opts)
-				log.info ("Ray :: initializeHypervisor: prepareResults: ${prepareResults}")
 			}
 		} catch (e) {
 			log.error("initialize hypervisor error:${e}", e)
 		}
-		log.info ("Ray :: initializeHypervisor: rtn: ${rtn}")
 		return rtn
 	}
 

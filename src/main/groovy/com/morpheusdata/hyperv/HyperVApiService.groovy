@@ -1,9 +1,6 @@
 package com.morpheusdata.hyperv
 
 import com.morpheusdata.core.MorpheusContext
-import com.morpheusdata.model.ComputeServer
-import com.morpheusdata.model.Network
-import com.morpheusdata.model.NetworkSubnet
 import groovy.json.JsonOutput
 import groovy.util.logging.Slf4j
 
@@ -23,16 +20,9 @@ class HyperVApiService {
     static defaultRoot = 'C:\\morpheus'
 
     def executeCommand(command, opts) {
-        log.info ("Ray :: executeCommand: opts: ${opts}")
-        log.info ("Ray :: executeCommand: command: ${command}")
-        log.info ("Ray :: executeCommand: opts.sshHost: ${opts.sshHost}")
-        log.info ("Ray :: executeCommand: opts.sshPort: ${opts.sshPort}")
-        log.info ("Ray :: executeCommand: opts.sshUsername: ${opts.sshUsername}")
-        log.info ("Ray :: executeCommand: opts.sshPassword: ${opts.sshPassword}")
+        // TODO: default sshPort value need to be removed from below code after appliance update
         def sshPort = opts.sshPort ? opts.sshPort?.toInteger() : 5985
-        log.info ("Ray :: executeCommand: sshPort: ${sshPort}")
         def output = morpheusContext.executeWindowsCommand(opts.sshHost, sshPort, opts.sshUsername, opts.sshPassword, command, null, false).blockingGet()
-        log.info ("Ray :: executeCommand: output: ${output}")
         return output
     }
 
@@ -426,51 +416,34 @@ class HyperVApiService {
     }
 
     def getHypervHost(opts) {
-        log.info("Ray :: getHypervHost: opts: ${opts}")
         def rtn = [success: false]
         def command = "Get-VMHost | Format-List"
         log.debug("getHypervHost command: ${command}")
-        log.info("Ray :: getHypervHost: command: ${command}")
         def results = executeCommand(command, opts)
-        log.info("Ray :: getHypervHost: results: ${results}")
-        log.info("Ray :: getHypervHost: results?.success: ${results?.success}")
-        log.info("Ray :: getHypervHost: results?.exitCode: ${results?.exitCode}")
         log.debug("getHypervHost: ${results}")
         if (results.success == true && results.exitCode == '0') {
             rtn.host = parseHypervListData(results.data)
             rtn.success = true
         }
         log.debug("getHypervHost: ${rtn}")
-        log.info("Ray :: getHypervHost: rtn: ${rtn}")
         return rtn
     }
 
     def getHypervServerInfo(opts) {
-        log.info ("Ray :: getHypervServerInfo: opts: ${opts}")
         def rtn = [success: false]
         def command = 'hostname'
-        log.info ("Ray :: getHypervServerInfo: command: ${command}")
         def out = executeCommand(command, opts)
-        log.info ("Ray :: getHypervServerInfo: out: ${out}")
         log.debug("out: ${out.data}")
         rtn.hostname = cleanData(out.data)
-        log.info ("Ray :: getHypervServerInfo: rtn.hostname: ${rtn.hostname}")
         command = 'wmic computersystem get TotalPhysicalMemory'
-        log.info ("Ray :: getHypervServerInfo: command3: ${command}")
         out = executeCommand(command, opts)
-        log.info ("Ray :: getHypervServerInfo: out1: ${out}")
         log.debug("out: ${out.data}")
         rtn.memory = cleanData(out.data, 'TotalPhysicalMemory')
-        log.info ("Ray :: getHypervServerInfo: rtn.memory: ${rtn.memory}")
         command = 'wmic diskdrive get size'
-        log.info ("Ray :: getHypervServerInfo: command4: ${command}")
         out = executeCommand(command, opts)
-        log.info ("Ray :: getHypervServerInfo: out4: ${out}")
         log.debug("out: ${out.data}")
         rtn.disks = cleanData(out.data, 'Size')
-        log.info ("Ray :: getHypervServerInfo: rtn.disks: ${rtn.disks}")
         rtn.success = true
-        log.info ("Ray :: getHypervServerInfo: rtn: ${rtn}")
         return rtn
     }
 
@@ -575,14 +548,12 @@ class HyperVApiService {
     }
 
     def listVirtualMachines(opts) {
-        log.info ("Ray :: api-listVirtualMachines: opts: ${opts}")
         def rtn = [success: false, virtualMachines: []]
 
 
         def hasMore = true
         def pageSize = 50
         def fetch = { offset ->
-            log.info ("Ray :: api-listVirtualMachines: inside fetch: offset: ${offset}")
 
             def commandStr = """\$report = @()"""
             commandStr += """
@@ -644,41 +615,23 @@ class HyperVApiService {
             def command = generateCommandString(commandStr)
             def out = wrapExecuteCommand(command, opts)
             log.debug("out: ${out.data}")
-            log.info ("Ray :: api-listVirtualMachines: inside fetch: out.data: ${out.data}")
-            log.info ("Ray :: api-listVirtualMachines: inside fetch: out.success: ${out.success}")
-            log.info ("Ray :: api-listVirtualMachines: inside fetch: hasMore: ${hasMore}")
-            def checkOutData = out.data != ''
-            log.info ("Ray :: api-listVirtualMachines: inside fetch: checkOutData: ${checkOutData}")
-            def checkOutData1 = out.data != null
-            log.info ("Ray :: api-listVirtualMachines: inside fetch: checkOutData1null: ${checkOutData1}")
             if (out.success) {
-                log.info ("Ray :: api-listVirtualMachines: inside if")
                 hasMore = out.data != null
-                log.info ("Ray :: api-listVirtualMachines: inside fetch: hasMore1: ${hasMore}")
                 if (out.data) {
                     rtn.virtualMachines += out.data
                 }
-                log.info ("Ray :: api-listVirtualMachines: inside fetch: rtn.virtualMachines?.size(): ${rtn.virtualMachines?.size()}")
                 rtn.success = true
             } else {
-                log.info ("Ray :: api-listVirtualMachines: inside else")
                 hasMore = false
             }
         }
-        log.info ("Ray :: api-listVirtualMachines: hasMore2: ${hasMore}")
 
         def currentOffset = 0
-        log.info ("Ray :: api-listVirtualMachines: pageSize: ${pageSize}")
-        while (hasMore ) {
-            log.info ("Ray :: api-listVirtualMachines: currentOffset: ${currentOffset}")
+        while (hasMore) {
             fetch(currentOffset)
             currentOffset += pageSize
-            if (currentOffset > 200){
-                break
-            }
         }
 
-        log.info ("Ray :: api-listVirtualMachines: rtn last: ${rtn}")
         return rtn
     }
 
@@ -690,10 +643,7 @@ class HyperVApiService {
     }
 
     def wrapExecuteCommand(String command, Map opts = [:]) {
-        log.info ("Ray :: api-wrapExecuteCommand: opts: ${opts}")
         def out = executeCommand(command, opts)
-        log.info ("Ray :: api-wrapExecuteCommand: out: ${out}")
-        log.info ("Ray :: api-wrapExecuteCommand: out.data: ${out.data}")
         if (out.data) {
             def payload = out.data
             if (!out.data.startsWith('[')) {
@@ -707,8 +657,6 @@ class HyperVApiService {
             }
             out.data = new groovy.json.JsonSlurper().parseText(payload)
         }
-        log.info ("Ray :: api-wrapExecuteCommand: out.data1: ${out.data}")
-        log.info ("Ray :: api-wrapExecuteCommand: out last: ${out}")
         out
     }
 
