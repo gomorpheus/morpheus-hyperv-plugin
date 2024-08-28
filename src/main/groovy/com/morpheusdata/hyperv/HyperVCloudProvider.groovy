@@ -397,7 +397,7 @@ class HyperVCloudProvider implements CloudProvider {
 								diskRoot   : cloudConfig.diskPath,
 								vmRoot     : cloudConfig.vmPath
 						]
-						def vmSwitches = apiService.listVmSwitches(hypervOpts, opts)
+						def vmSwitches = apiService.listVmSwitches(opts)
 						log.debug("validate: vmSwitches: ${vmSwitches}")
 						if (vmSwitches.success == true)
 							rtn.success = true
