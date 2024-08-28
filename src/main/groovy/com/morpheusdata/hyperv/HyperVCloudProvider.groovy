@@ -474,9 +474,7 @@ class HyperVCloudProvider implements CloudProvider {
 				newServer.hostname = serverInfo.hostname
 			}
 			newServer.sshHost = cloud.getConfigProperty('hypervHost')
-			def sshPort = cloud.getConfigProperty('winrmPort') ? cloud.getConfigProperty('winrmPort').toInteger() : 5985
-			// TODO: need to enable sshPort after appliance update
-			//newServer.sshPort = sshPort
+			newServer.sshPort = cloud.getConfigProperty('winrmPort') ? cloud.getConfigProperty('winrmPort').toInteger() : 5985
 			newServer.internalIp = newServer.sshHost
 			newServer.externalIp = newServer.sshHost
 			newServer.sshUsername = HypervOptsUtility.getUsername(cloud)

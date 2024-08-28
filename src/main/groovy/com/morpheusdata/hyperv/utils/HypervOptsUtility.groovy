@@ -82,7 +82,7 @@ class HypervOptsUtility {
         def diskRoot = serverConfig.diskPath?.length() > 0 ? serverConfig.diskPath : HyperVApiService.defaultRoot + '\\Disks'
         def zoneRoot = serverConfig.workingPath?.length() > 0 ? serverConfig.workingPath : '$HOME/morpheus'
         return [hypervisorConfig:serverConfig, hypervisor:hypervisor, sshHost:hypervisor.sshHost, sshUsername:hypervisor.sshUsername,
-                sshPassword:hypervisor.sshPassword, zoneRoot:zoneRoot, diskRoot:diskRoot, vmRoot:vmRoot]
+                sshPassword:hypervisor.sshPassword, zoneRoot:zoneRoot, diskRoot:diskRoot, vmRoot:vmRoot, sshPort:hypervisor.sshPort]
     }
 
     static getHypervInitializationOpts(zone) {

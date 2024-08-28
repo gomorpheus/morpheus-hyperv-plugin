@@ -20,9 +20,7 @@ class HyperVApiService {
     static defaultRoot = 'C:\\morpheus'
 
     def executeCommand(command, opts) {
-        // TODO: default sshPort value need to be removed from below code after appliance update
-        def sshPort = opts.sshPort ? opts.sshPort?.toInteger() : 5985
-        def output = morpheusContext.executeWindowsCommand(opts.sshHost, sshPort, opts.sshUsername, opts.sshPassword, command, null, false).blockingGet()
+        def output = morpheusContext.executeWindowsCommand(opts.sshHost, opts.sshPort?.toInteger(), opts.sshUsername, opts.sshPassword, command, null, false).blockingGet()
         return output
     }
 
