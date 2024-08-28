@@ -527,7 +527,7 @@ class HyperVCloudProvider implements CloudProvider {
 						def hostResults = loadHypervHost([zone: cloud], hypervisor)
 						if (hostResults.success == true && hostResults.host && hostResults?.host['ComputerName']) {
 							resolveUniqueIdsToVMids([zone: cloud], hypervisor)
-							def results = listVirtualMachines(hypervHypervisorOpts)
+							def results = listVirtualMachines(hypervHypervisorOpts, true)
 							log.debug("results : ${results}")
 							virtualMachineList += results.virtualMachines
 							log.debug("virtualMachineList.size(): ${virtualMachineList.size()}")
@@ -825,6 +825,10 @@ class HyperVCloudProvider implements CloudProvider {
 
 	private resolveUniqueIdsToVMids(Map opts, node) {
 		log.debug("opts: ${opts}")
+		// if zone is null then returning from this method as rest of the method not going to execute if hosts value is null
+		if (!opts.zone){
+			return
+		}
 		DataQuery query = new DatasetQuery().withFilters(
 				new DataFilter("zone.id", opts.zone?.id),
 				new DataFilter("computeServerType.code", "hypervVm"),
@@ -839,7 +843,7 @@ class HyperVCloudProvider implements CloudProvider {
 			return
 		def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, opts.zone)
 		hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
-		def listResults = listVirtualMachines(hypervOpts)
+		def listResults = listVirtualMachines(hypervOpts, false)
 		log.debug("listResults: ${listResults}")
 		if (listResults.success == true) {
 			def remoteVms = listResults.virtualMachines
@@ -858,11 +862,11 @@ class HyperVCloudProvider implements CloudProvider {
 		}
 	}
 
-	def listVirtualMachines(opts) {
+	def listVirtualMachines(opts, testVmConnFlg) {
 		log.debug("opts: ${opts}")
 		def rtn = [success: false]
 		try {
-			rtn = apiService.listVirtualMachines(opts)
+			rtn = apiService.listVirtualMachines(opts, null, testVmConnFlg)
 		} catch (e) {
 			log.debug("listVirtualMachines error: ${e}", e)
 		}
