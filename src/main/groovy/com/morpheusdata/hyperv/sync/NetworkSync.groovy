@@ -4,6 +4,8 @@ import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.data.DataQuery
 import com.morpheusdata.core.util.SyncTask
 import com.morpheusdata.hyperv.HyperVApiService
+import com.morpheusdata.hyperv.utils.HypervOptsUtility
+import com.morpheusdata.model.Cloud
 import com.morpheusdata.model.ComputeServer
 import com.morpheusdata.model.Network
 import com.morpheusdata.model.NetworkSubnet
@@ -20,11 +22,11 @@ import groovy.util.logging.Slf4j
 class NetworkSync {
 
     private MorpheusContext morpheusContext
-    private ComputeServer server
+    private Cloud cloud
     private HyperVApiService apiService
 
-    NetworkSync(MorpheusContext morpheusContext, ComputeServer server, HyperVApiService apiService) {
-        this.server = server
+    NetworkSync(MorpheusContext morpheusContext, Cloud cloud, HyperVApiService apiService) {
+        this.cloud = cloud
         this.morpheusContext = morpheusContext
         this.apiService = apiService
     }
@@ -33,44 +35,28 @@ class NetworkSync {
         log.debug "NetworkSync"
         try {
             def codes = ['hypervExternalNetwork', 'hypervInternalNetwork']
-            def networkTypes = codes.collect { code -> new NetworkType(code: code) }
-            log.info("RAZI :: networkTypes: ${networkTypes}")
+            def networkTypes = morpheusContext.services.network.type.list(new DataQuery().withFilter('code', 'in', codes))
             NetworkSubnetType subnetType = new NetworkSubnetType(code: 'hyperv')
-            log.info("RAZI :: subnetType: ${subnetType}")
+            def server = morpheusContext.services.computeServer.find(new DataQuery().withFilter('zone.id', cloud.id))
 
-            def cloudConfig = server.cloud.getConfigMap()
-            log.info("RAZI :: cloudConfig: ${cloudConfig}")
-            def opts = [
-                    sshHost         : cloudConfig.hypervHost,
-                    sshPort         : cloudConfig.winrmPort,
-                    sshUsername     : cloudConfig.username,
-                    sshPassword     : cloudConfig.password
-            ]
-            log.info("RAZI :: opts: ${opts}")
-            def listResults = apiService.listVmSwitches(opts)
-            log.info("RAZI :: listResults: ${listResults}")
+            def hypervOpts = HypervOptsUtility.getHypervZoneOpts(morpheusContext, cloud)
+            hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(server)
+
+            def listResults = apiService.listVmSwitches(hypervOpts)
 
             if (listResults.success == true && listResults?.vmSwitchList) {
-                def existingItems = morpheusContext.async.network.listIdentityProjections(new DataQuery()
-                        .withFilter('zone.id', server.cloud.id).withFilter('type', 'in', networkTypes))
-
+                def existingItems = morpheusContext.async.cloud.network.listIdentityProjections(new DataQuery()
+                        .withFilter('zone.id', cloud.id).withFilter('type', 'in', networkTypes))
                 SyncTask<NetworkIdentityProjection, Map, Network> syncTask = new SyncTask<>(existingItems, listResults.vmSwitchList as Collection<Map>)
+
                 syncTask.addMatchFunction { NetworkIdentityProjection morpheusItem, Map cloudItem ->
-                    log.info("RAZI :: morpheusItem?.name: ${morpheusItem?.name}")
-                    log.info("RAZI :: cloudItem?.name: ${cloudItem?.name}")
-                    morpheusItem?.name == cloudItem?.name
+                    morpheusItem?.externalId == cloudItem?.name
                 }.onDelete { removeItems ->
-                    log.info("RAZI :: removeItems START")
                     morpheusContext.async.cloud.network.remove(removeItems).blockingGet()
-                    log.info("RAZI :: removeItems STOP")
                 }.onUpdate { List<SyncTask.UpdateItem<Network, Map>> updateItems ->
-                    log.info("RAZI :: updateMatchedNetworks START")
-                    updateMatchedNetworks(updateItems, networkTypes, subnetType)
-                    log.info("RAZI :: updateMatchedNetworks STOP")
+                    updateMatchedNetworks(updateItems, networkTypes, subnetType, server)
                 }.onAdd { itemsToAdd ->
-                    log.info("RAZI :: addMissingNetworks START")
-                    addMissingNetworks(itemsToAdd, networkTypes, subnetType)
-                    log.info("RAZI :: addMissingNetworks STOP")
+                    addMissingNetworks(itemsToAdd, networkTypes, subnetType, server)
                 }.withLoadObjectDetailsFromFinder { List<SyncTask.UpdateItemDto<NetworkIdentityProjection, Map>> updateItems ->
                     return morpheusContext.async.cloud.network.listById(updateItems.collect { it.existingItem.id } as List<Long>)
                 }.start()
@@ -82,55 +68,52 @@ class NetworkSync {
         }
     }
 
-    private addMissingNetworks(Collection<Map> addList, List<NetworkType> networkTypes, NetworkSubnetType subnetType) {
+    private addMissingNetworks(Collection<Map> addList, List<NetworkType> networkTypes, NetworkSubnetType subnetType, ComputeServer server) {
+        log.debug("NetworkSync >> addMissingNetworks >> called")
         def networkAdds = []
         try {
             addList?.each { cloudItem ->
-                def networkType = networkTypes.find{ type -> type.externalType == cloudItem.type }
-                log.info("RAZI :: networkType: ${networkType}")
+                def networkType = networkTypes.find{ type -> type.externalType == cloudItem.type}
                 def networkConfig = [
-                        code        : "hyperv.network.${server.cloud.id}.${cloudItem.name}",
-                        category    : "hyperv.network.${server.cloud.id}",
-                        zone        : server.cloud,
+                        code        : "hyperv.network.${cloud.id}.${cloudItem.name}",
+                        category    : "hyperv.network.${cloud.id}",
+                        cloud        : cloud,
                         dhcpServer  : true,
                         name        : cloudItem.name,
                         externalId  : cloudItem.name,
                         type        : networkType,
                         refType     : 'ComputeZone',
-                        refId       : "${server.cloud.id}",
-                        owner       : server.cloud.owner,
-                        active      : server.cloud.defaultNetworkSyncActive
+                        refId       : cloud.id,
+                        owner       : cloud.owner,
+                        active      : cloud.defaultNetworkSyncActive
                 ]
                 Network networkAdd = new Network(networkConfig)
 
                 def subnetConfig = [
                         account             : server.account,
-                        category            : "hyperv.network.${server.cloud.id}.${server.id}",
+                        category            : "hyperv.network.${cloud.id}.${server.id}",
                         networkSubnetType   : subnetType,
-                        code                : "hyperv.network.${server.cloud.id}.${server.id}.${cloudItem.name}",
+                        code                : "hyperv.network.${cloud.id}.${server.id}.${cloudItem.name}",
                         name                : cloudItem.name,
                         externalId          : cloudItem.name,
                         refType             : 'ComputeServer',
                         refId               : server.id,
                         description         : cloudItem.name
                 ]
-                log.info("RAZI :: subnetConfig: ${subnetConfig}")
+
                 def addSubnet = new NetworkSubnet(subnetConfig)
                 morpheusContext.async.networkSubnet.create([addSubnet], networkAdd)
                 networkAdds << networkAdd
             }
             //create networks
-            log.info("RAZI :: networkAdds: ${networkAdds}")
             morpheusContext.async.cloud.network.create(networkAdds).blockingGet()
-            log.info("RAZI :: networkAdds SUCCESS")
         } catch (e) {
             log.error "Error in adding Network sync ${e}", e
         }
     }
 
-    private updateMatchedNetworks(List<SyncTask.UpdateItem<Network, Map>> updateList, List<NetworkType> networkTypes, NetworkSubnetType subnetType) {
-        log.debug("NetworkSync:updateMatchedNetworks: Entered")
-//        def networkSubnets = morpheusContext.services.networkSubnet.listIdentityProjections(server.cloud.id)
+    private updateMatchedNetworks(List<SyncTask.UpdateItem<Network, Map>> updateList, List<NetworkType> networkTypes, NetworkSubnetType subnetType, ComputeServer server) {
+        log.debug("NetworkSync >> updateMatchedNetworks >> Entered")
         List<Network> itemsToUpdate = []
         try {
             for (update in updateList) {
@@ -142,15 +125,13 @@ class NetworkSync {
                     existingItem.type = type
                     save = true
                 }
-//                def existingSubnet = networkSubnets.find{subnet -> subnet.refType == 'ComputeServer' && subnet.refId == server.id}
                 def existingSubnet = existingItem.subnets?.find{ subnet -> subnet.refType == 'ComputeServer' && subnet.refId == server.id }
-                log.info("RAZI :: existingSubnet: ${existingSubnet}")
                 if(!existingSubnet) {
                     def subnetConfig = [
                             account             : server.account,
-                            category            : "hyperv.network.${server.cloud.id}.${server.id}",
+                            category            : "hyperv.network.${cloud.id}.${server.id}",
                             networkSubnetType   : subnetType,
-                            code                : "hyperv.network.${server.cloud.id}.${server.id}.${masterItem.name}",
+                            code                : "hyperv.network.${cloud.id}.${server.id}.${masterItem.name}",
                             name                : masterItem.name,
                             externalId          : masterItem.name,
                             refType             : 'ComputeServer',
@@ -160,13 +141,11 @@ class NetworkSync {
                     def addSubnet = new NetworkSubnet(subnetConfig)
                     morpheusContext.async.networkSubnet.create([addSubnet], existingItem)
                 }
-                log.info("RAZI :: save: ${save}")
 
                 if (save) {
                     itemsToUpdate << existingItem
                 }
             }
-            log.info("RAZI :: itemsToUpdate.size(): ${itemsToUpdate.size()}")
             if (itemsToUpdate.size() > 0) {
                 morpheusContext.async.cloud.network.save(itemsToUpdate).blockingGet()
             }

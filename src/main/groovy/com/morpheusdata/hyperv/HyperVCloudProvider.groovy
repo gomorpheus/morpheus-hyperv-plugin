@@ -9,6 +9,7 @@ import com.morpheusdata.core.data.DatasetQuery
 import com.morpheusdata.core.providers.CloudProvider
 import com.morpheusdata.core.providers.ProvisionProvider
 import com.morpheusdata.core.util.ConnectionUtils
+import com.morpheusdata.hyperv.sync.NetworkSync
 import com.morpheusdata.hyperv.utils.HypervOptsUtility
 import com.morpheusdata.model.*
 import com.morpheusdata.request.ValidateCloudRequest
@@ -435,7 +436,7 @@ class HyperVCloudProvider implements CloudProvider {
 					log.debug("initResults: {}", initResults)
 					if(initResults.success == true) {
 					// TODO: below methods should be enebled after implementing it.
-//						refresh(cloudInfo)
+						refresh(cloudInfo)
 //						refreshDaily(cloudInfo)
 						rtn.success = true
 					}
@@ -495,8 +496,9 @@ class HyperVCloudProvider implements CloudProvider {
 							virtualMachineList += results.virtualMachines
 							log.debug ("virtualMachineList.size(): ${virtualMachineList.size()}")
 							if (results.success == true) {
-								// TODO: cacheNetworks need to be implemented with cacheNetowork user story
-								//rtn.success = cacheNetworks(opts, node).success
+								def now = new Date().time
+								new NetworkSync(context, cloud, apiService).execute()
+								log.debug("${cloud.name}: NetworkSync in ${new Date().time - now}ms")
 
 								allOnline = results.success && allOnline
 								anyOnline = results.success || anyOnline
