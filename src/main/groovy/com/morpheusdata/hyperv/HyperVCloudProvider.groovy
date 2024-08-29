@@ -526,8 +526,9 @@ class HyperVCloudProvider implements CloudProvider {
 						//check if this host is online
 						def hostResults = loadHypervHost([zone: cloud], hypervisor)
 						if (hostResults.success == true && hostResults.host && hostResults?.host['ComputerName']) {
-							resolveUniqueIdsToVMids([zone: cloud], hypervisor)
-							def results = listVirtualMachines(hypervHypervisorOpts, true)
+							// This logic need to be moved in cacheVirtualMachines
+							//resolveUniqueIdsToVMids([zone: cloud], hypervisor)
+							def results = apiService.listVirtualMachines(hypervHypervisorOpts, 1, 1)
 							log.debug("results : ${results}")
 							virtualMachineList += results.virtualMachines
 							log.debug("virtualMachineList.size(): ${virtualMachineList.size()}")
@@ -823,7 +824,8 @@ class HyperVCloudProvider implements CloudProvider {
 		return rtn
 	}
 
-	private resolveUniqueIdsToVMids(Map opts, node) {
+	// move - > vm sync
+	/*private resolveUniqueIdsToVMids(Map opts, node) {
 		log.debug("opts: ${opts}")
 		// if zone is null then returning from this method as rest of the method not going to execute if hosts value is null
 		if (!opts.zone){
@@ -843,7 +845,8 @@ class HyperVCloudProvider implements CloudProvider {
 			return
 		def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, opts.zone)
 		hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
-		def listResults = listVirtualMachines(hypervOpts, false)
+		def listResults = apiService.listVirtualMachines(hypervOpts, null, false)
+		//listVirtualMachines(hypervOpts, false)
 		log.debug("listResults: ${listResults}")
 		if (listResults.success == true) {
 			def remoteVms = listResults.virtualMachines
@@ -860,18 +863,7 @@ class HyperVCloudProvider implements CloudProvider {
 				}
 			}
 		}
-	}
-
-	def listVirtualMachines(opts, testVmConnFlg) {
-		log.debug("opts: ${opts}")
-		def rtn = [success: false]
-		try {
-			rtn = apiService.listVirtualMachines(opts, null, testVmConnFlg)
-		} catch (e) {
-			log.debug("listVirtualMachines error: ${e}", e)
-		}
-		return rtn
-	}
+	}*/
 
 	private updateHypervisorStatus(server, status, powerState, msg) {
 		log.debug("server: {}, status: {}, powerState: {}, msg: {}", server, status, powerState, msg)

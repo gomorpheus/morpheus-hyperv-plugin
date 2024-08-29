@@ -545,12 +545,11 @@ class HyperVApiService {
         return rtn
     }
 
-    def listVirtualMachines(opts, Integer pageSizeParam, testVmConnFlg) {
+    def listVirtualMachines(opts, Integer pageSize = 50, Integer maxResult = null) {
         def rtn = [success: false, virtualMachines: []]
 
 
         def hasMore = true
-        def pageSize = pageSizeParam ? pageSizeParam : 50
         def fetch = { offset ->
 
             def commandStr = """\$report = @()"""
@@ -618,6 +617,9 @@ class HyperVApiService {
                 if (out.data) {
                     rtn.virtualMachines += out.data
                 }
+                if (maxResult && hasMore && rtn.virtualMachines.size() >= maxResult) {
+                    hasMore = false
+                }
                 rtn.success = true
             } else {
                 hasMore = false
@@ -628,9 +630,6 @@ class HyperVApiService {
         while (hasMore) {
             fetch(currentOffset)
             currentOffset += pageSize
-            if (testVmConnFlg) {
-                hasMore = false
-            }
         }
         return rtn
     }
