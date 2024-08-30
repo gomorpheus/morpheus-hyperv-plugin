@@ -225,17 +225,17 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	ServiceResponse stopWorkload(Workload workload) {
 		def rtn = ServiceResponse.prepare()
 		try {
-			if(workload.server?.externalId) {
+			if (workload.server?.externalId) {
 				def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(context, workload)
 				def results = apiService.stopServer(hypervOpts, hypervOpts.name)
-				if(results.success == true) {
+				if (results.success == true) {
 					rtn.success = true
 				}
 			} else {
 				rtn.success = true
 				rtn.msg = 'vm not found'
 			}
-		} catch(e) {
+		} catch (e) {
 			log.error("stopWorkload error: ${e}", e)
 			rtn.msg = e.message
 		}
