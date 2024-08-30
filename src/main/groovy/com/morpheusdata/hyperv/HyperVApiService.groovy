@@ -613,7 +613,7 @@ class HyperVApiService {
             def out = wrapExecuteCommand(command, opts)
             log.debug("out: ${out.data}")
             if (out.success) {
-                hasMore = (out.data != '' || out.data != null)
+                hasMore = (out.data != '' && out.data != null)
                 if (out.data) {
                     rtn.virtualMachines += out.data
                 }
