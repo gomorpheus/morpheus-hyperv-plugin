@@ -232,8 +232,8 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					rtn.success = true
 				}
 			} else {
-				rtn.success = true
-				rtn.msg = 'vm not found'
+				rtn.success = false
+				rtn.msg = 'externalId not found'
 			}
 		} catch (e) {
 			log.error("stopWorkload error: ${e}", e)
