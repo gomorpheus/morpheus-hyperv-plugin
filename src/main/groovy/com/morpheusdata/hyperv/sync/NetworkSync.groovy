@@ -88,6 +88,7 @@ class NetworkSync {
                         active      : cloud.defaultNetworkSyncActive
                 ]
                 Network networkAdd = new Network(networkConfig)
+                morpheusContext.async.cloud.network.create(networkAdd).blockingGet()
 
                 def subnetConfig = [
                         account             : server.account,
@@ -102,11 +103,9 @@ class NetworkSync {
                 ]
 
                 def addSubnet = new NetworkSubnet(subnetConfig)
-                morpheusContext.async.networkSubnet.create([addSubnet], networkAdd)
-                networkAdds << networkAdd
+                morpheusContext.async.networkSubnet.create([addSubnet], networkAdd).blockingGet()
+                morpheusContext.async.cloud.network.save(networkAdd).blockingGet()
             }
-            //create networks
-            morpheusContext.async.cloud.network.create(networkAdds).blockingGet()
         } catch (e) {
             log.error "Error in adding Network sync ${e}", e
         }
