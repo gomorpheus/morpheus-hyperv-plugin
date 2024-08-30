@@ -435,7 +435,7 @@ class HyperVCloudProvider implements CloudProvider {
 					log.debug("initResults: {}", initResults)
 					if(initResults.success == true) {
 					// TODO: below methods should be enebled after implementing it.
-//						refresh(cloudInfo)
+						refresh(cloudInfo)
 //						refreshDaily(cloudInfo)
 						rtn.success = true
 					}
@@ -451,7 +451,45 @@ class HyperVCloudProvider implements CloudProvider {
 
 	// TODO: Below method would be implemented later by taking reference from embedded code. we have separate story to work on this
 	def initializeHypervisor(cloud) {
-		def rtn = [success:true]
+		def rtn = [success: false]
+		log.debug("cloud: ${cloud}")
+		ComputeServer newServer
+		def opts = HypervOptsUtility.getHypervInitializationOpts(cloud)
+		def serverInfo = apiService.getHypervServerInfo(opts)
+		if (serverInfo.success == true && serverInfo.hostname) {
+			def cloudConfig = cloud.getConfigMap()
+			def ipAddress = cloud.getConfigProperty('hypervHost')
+			def serverType = context.async.cloud.findComputeServerTypeByCode("hypervHypervisor").blockingGet()
+			newServer = findHypervHypervisor(cloud, serverInfo.hostname, ipAddress, serverType)
+			if (!newServer) {
+				newServer = new ComputeServer()
+				newServer.account = cloud.account
+				newServer.cloud = cloud
+				newServer.computeServerType = serverType
+				newServer.serverOs = new OsType(code: 'windows.server.2012')
+				newServer.name = serverInfo.hostname
+				newServer = context.services.computeServer.create(newServer)
+			}
+			if (serverInfo.hostname) {
+				newServer.hostname = serverInfo.hostname
+			}
+			newServer.sshHost = cloud.getConfigProperty('hypervHost')
+			newServer.sshPort = cloud.getConfigProperty('winrmPort') ? cloud.getConfigProperty('winrmPort').toInteger() : 5985
+			newServer.internalIp = newServer.sshHost
+			newServer.externalIp = newServer.sshHost
+			newServer.sshUsername = HypervOptsUtility.getUsername(cloud)
+			newServer.sshPassword = HypervOptsUtility.getPassword(cloud)
+			newServer.setConfigProperty('workingPath', cloud.getConfigProperty('workingPath'))
+			newServer.setConfigProperty('vmPath', cloud.getConfigProperty('vmPath'))
+			newServer.setConfigProperty('diskPath', cloud.getConfigProperty('diskPath'))
+		}
+		// initializeHypervisor from context
+		log.debug("newServer: ${newServer}")
+		context.services.computeServer.save(newServer)
+		if (newServer) {
+			context.async.hypervisorService.initialize(newServer)
+			rtn.success = true
+		}
 		return rtn
 	}
 
@@ -470,7 +508,7 @@ class HyperVCloudProvider implements CloudProvider {
 		try {
 			def syncDate = new Date()
 			def hypervisorList = getHypervHypervisors(cloud)
-			log.debug ("hypervisorList?.size(): ${hypervisorList?.size()}")
+			log.debug("hypervisorList?.size(): ${hypervisorList?.size()}")
 			def virtualMachineList = []
 			def allOnline = true
 			def anyOnline = false
@@ -479,21 +517,21 @@ class HyperVCloudProvider implements CloudProvider {
 					continue
 				}
 				if (hypervisor.enabled == true) {
-					def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, cloud)
-					hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(hypervisor)
-					def hostOnline = ConnectionUtils.testHostConnectivity(hypervOpts.sshHost, 5985, false, true, null)
-					log.debug ("hostOnline: ${hostOnline}")
+					def hypervHypervisorOpts = HypervOptsUtility.getHypervHypervisorOpts(hypervisor)
+					def hostOnline = ConnectionUtils.testHostConnectivity(hypervHypervisorOpts.sshHost, 5985, false, true, null)
+					log.debug("hostOnline: ${hostOnline}")
 					if (hostOnline) {
 						allOnline = hostOnline && allOnline
 						anyOnline = hostOnline || anyOnline
 						//check if this host is online
 						def hostResults = loadHypervHost([zone: cloud], hypervisor)
-						if (hostResults.success == true && hostResults.host && hostResults.host['ComputerName']) {
-							resolveUniqueIdsToVMids([zone: cloud], hypervisor)
-							def results = listVirtualMachines(hypervOpts)
-							log.debug ("cacheResults : ${results}")
+						if (hostResults.success == true && hostResults.host && hostResults?.host['ComputerName']) {
+							// This logic need to be moved in cacheVirtualMachines
+							//resolveUniqueIdsToVMids([zone: cloud], hypervisor)
+							def results = apiService.listVirtualMachines(hypervHypervisorOpts, 1, 1)
+							log.debug("results : ${results}")
 							virtualMachineList += results.virtualMachines
-							log.debug ("virtualMachineList.size(): ${virtualMachineList.size()}")
+							log.debug("virtualMachineList.size(): ${virtualMachineList.size()}")
 							if (results.success == true) {
 								// TODO: cacheNetworks need to be implemented with cacheNetowork user story
 								//rtn.success = cacheNetworks(opts, node).success
@@ -529,7 +567,7 @@ class HyperVCloudProvider implements CloudProvider {
 				response.success = true
 			}
 			if (allOnline == true && anyOnline == true) {
-				context.async.cloud.updateCloudStatus(cloud, Cloud.Status.ok, null, syncDate) // check:
+				context.async.cloud.updateCloudStatus(cloud, Cloud.Status.ok, null, syncDate)
 				context.services.operationNotification.clearZoneAlarm(cloud)
 			} else if (anyOnline == true) {
 				context.services.operationNotification.clearZoneAlarm(cloud)
@@ -537,7 +575,7 @@ class HyperVCloudProvider implements CloudProvider {
 				context.services.operationNotification.createZoneAlarm(cloud, 'no hypervisors online')
 			}
 		} catch (e) {
-			log.error("refresh zone error:${e}", e)
+			log.error("refreshZone error:${e}", e)
 		}
 		return response
 	}
@@ -723,15 +761,34 @@ class HyperVCloudProvider implements CloudProvider {
 		return 'Hyper-V'
 	}
 
-	private updateHypervisorStatus(server, status, powerState, msg) {
-		log.debug ("server: {}, status: {}, powerState: {}, msg: {}", server, status, powerState, msg)
-		if (server.status != status || server.powerState != powerState) {
-			server.status = status
-			server.powerState = powerState
-			server.statusDate = new Date()
-			server.statusMessage = msg
-			context.services.computeServer.save(server)
+	def validateRequiredConfigFields(fieldArray, config) {
+		def errors = [:]
+		fieldArray.each { field ->
+			if (config[field] != null && config[field]?.size() == 0) {
+				def display = field.replaceAll(/([A-Z])/, / $1/).toLowerCase()
+				errors[field] = "Enter a ${display}"
+			}
 		}
+		return errors
+	}
+
+	def findHypervHypervisor(Cloud cloud, String name, String ipAddress, ComputeServerType serverType) {
+		log.debug("name: {}, ipAddress: {}", name, ipAddress)
+		def rtn = context.services.computeServer.find(new DataQuery()
+				.withFilter('zone.id', cloud.id.toLong())
+				.withFilter('computeServerType', serverType)
+				.withFilter('internalIp', ipAddress))
+		if (!rtn) {
+			rtn = context.services.computeServer.find(new DataQuery().withFilters(
+					new DataFilter('zone.id', cloud.id.toLong()),
+					new DataFilter('computeServerType', serverType),
+					new DataOrFilter(
+							new DataFilter('hostname', name),
+							new DataFilter('name', name)
+					)
+			))
+		}
+		return rtn
 	}
 
 	def getHypervHypervisors(Cloud cloud) {
@@ -740,11 +797,11 @@ class HyperVCloudProvider implements CloudProvider {
 	}
 
 	def loadHypervHost(opts, node) {
+		log.debug("opts: ${opts}")
 		def rtn = [success: false]
 		try {
 			def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, opts.zone)
 			def hypervisorOpts = HypervOptsUtility.getHypervHypervisorOpts(node)
-			//hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
 			hypervOpts.hypervisorConfig = hypervisorOpts.hypervisorConfig
 			hypervOpts.hypervisor = hypervisorOpts.hypervisor
 			hypervOpts.sshHost = hypervisorOpts.sshHost
@@ -756,7 +813,7 @@ class HyperVCloudProvider implements CloudProvider {
 			hypervOpts.sshPort = opts.zone.getConfigMap().winrmPort
 
 			def hostResults = apiService.getHypervHost(hypervOpts)
-			log.debug ("hostResults: ${hostResults}")
+			log.debug("hostResults: ${hostResults}")
 			if (hostResults.success == true) {
 				rtn.success = true
 				rtn.host = hostResults.host
@@ -767,9 +824,15 @@ class HyperVCloudProvider implements CloudProvider {
 		return rtn
 	}
 
-	private resolveUniqueIdsToVMids(Map opts, node) {
+	// move - > vm sync
+	/*private resolveUniqueIdsToVMids(Map opts, node) {
+		log.debug("opts: ${opts}")
+		// if zone is null then returning from this method as rest of the method not going to execute if hosts value is null
+		if (!opts.zone){
+			return
+		}
 		DataQuery query = new DatasetQuery().withFilters(
-				new DataFilter("zone", opts.zone),
+				new DataFilter("zone.id", opts.zone?.id),
 				new DataFilter("computeServerType.code", "hypervVm"),
 				new DataOrFilter(
 						new DataFilter('uniqueId', ''),
@@ -777,12 +840,14 @@ class HyperVCloudProvider implements CloudProvider {
 				)
 		)
 		def hosts = context.services.computeServer.list(query)
-		log.debug ("hosts?.size(): ${hosts?.size()}")
+		log.debug("hosts?.size(): ${hosts?.size()}")
 		if (hosts.size() < 1)
 			return
 		def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, opts.zone)
 		hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
-		def listResults = listVirtualMachines(hypervOpts)
+		def listResults = apiService.listVirtualMachines(hypervOpts, null, false)
+		//listVirtualMachines(hypervOpts, false)
+		log.debug("listResults: ${listResults}")
 		if (listResults.success == true) {
 			def remoteVms = listResults.virtualMachines
 			for (server in hosts) {
@@ -794,31 +859,20 @@ class HyperVCloudProvider implements CloudProvider {
 				}
 				if (match) {
 					server.uniqueId = match.ID
-					//server.save(flush: true)
 					context.services.computeServer.save(server)
 				}
 			}
 		}
-	}
+	}*/
 
-	def listVirtualMachines(opts) {
-		def rtn = [success: false]
-		try {
-			rtn = apiService.listVirtualMachines(opts)
-		} catch (e) {
-			log.debug("listVirtualMachines error: ${e}", e)
+	private updateHypervisorStatus(server, status, powerState, msg) {
+		log.debug("server: {}, status: {}, powerState: {}, msg: {}", server, status, powerState, msg)
+		if (server.status != status || server.powerState != powerState) {
+			server.status = status
+			server.powerState = powerState
+			server.statusDate = new Date()
+			server.statusMessage = msg
+			context.services.computeServer.save(server)
 		}
-		return rtn
-  }
-  
-	def validateRequiredConfigFields(fieldArray, config) {
-		def errors = [:]
-		fieldArray.each { field ->
-			if (config[field] != null && config[field]?.size() == 0) {
-				def display = field.replaceAll(/([A-Z])/, / $1/).toLowerCase()
-				errors[field] = "Enter a ${display}"
-			}
-		}
-		return errors
 	}
 }
