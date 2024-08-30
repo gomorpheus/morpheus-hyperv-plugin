@@ -223,7 +223,23 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	ServiceResponse stopWorkload(Workload workload) {
-		return ServiceResponse.success()
+		def rtn = ServiceResponse.prepare()
+		try {
+			if (workload.server?.externalId) {
+				def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(context, workload)
+				def results = apiService.stopServer(hypervOpts, hypervOpts.name)
+				if (results.success == true) {
+					rtn.success = true
+				}
+			} else {
+				rtn.success = false
+				rtn.msg = 'externalId not found'
+			}
+		} catch (e) {
+			log.error("stopWorkload error: ${e}", e)
+			rtn.msg = e.message
+		}
+		return rtn
 	}
 
 	/**

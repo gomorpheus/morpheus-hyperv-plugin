@@ -697,7 +697,7 @@ class HyperVApiService {
         try {
             def command = "Stop-VM -Name \"${vmId}\" -Force${opts.turnOff ? ' -TurnOff' : ''}"
             def out = executeCommand(command, opts)
-            rtn.success = out.success && out.exitValue == 0
+            rtn.success = out.success && out.exitCode == '0'
             println("stop server: ${out}")
         } catch (e) {
             log.error("startServer error: ${e}", e)
