@@ -319,16 +319,16 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		log.debug("startServer: computeServer.id: ${computeServer?.id}")
 		def rtn = ServiceResponse.prepare()
 		try {
-			if(computeServer?.externalId) {
+			if (computeServer?.externalId) {
 				def hypervOpts = HypervOptsUtility.getAllHypervServerOpts(context, computeServer)
 				def results = apiService.startServer(hypervOpts, hypervOpts.name)
-				if(results.success == true) {
+				if (results.success == true) {
 					rtn.success = true
 				}
 			} else {
 				rtn.msg = 'externalId not found'
 			}
-		} catch(e) {
+		} catch (e) {
 			log.error("startServer error:${e}", e)
 		}
 		return rtn
