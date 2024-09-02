@@ -73,38 +73,53 @@ class NetworkSync {
         def networkAdds = []
         try {
             addList?.each { cloudItem ->
-                def networkType = networkTypes.find{ type -> type.externalType == cloudItem.type}
+                def networkType = networkTypes.find { type -> type.externalType == cloudItem.type }
+
                 def networkConfig = [
-                        code        : "hyperv.network.${cloud.id}.${cloudItem.name}",
-                        category    : "hyperv.network.${cloud.id}",
-                        cloud        : cloud,
-                        dhcpServer  : true,
-                        name        : cloudItem.name,
-                        externalId  : cloudItem.name,
-                        type        : networkType,
-                        refType     : 'ComputeZone',
-                        refId       : cloud.id,
-                        owner       : cloud.owner,
-                        active      : cloud.defaultNetworkSyncActive
+                        code      : "hyperv.network.${cloud.id}.${cloudItem.name}",
+                        category  : "hyperv.network.${cloud.id}",
+                        cloud     : cloud,
+                        dhcpServer: true,
+                        name      : cloudItem.name,
+                        externalId: cloudItem.name,
+                        type      : networkType,
+                        refType   : 'ComputeZone',
+                        refId     : cloud.id,
+                        owner     : cloud.owner,
+                        active    : cloud.defaultNetworkSyncActive
                 ]
                 Network networkAdd = new Network(networkConfig)
-                morpheusContext.async.cloud.network.create(networkAdd).blockingGet()
+                networkAdds << networkAdd
+            }
 
-                def subnetConfig = [
-                        account             : server.account,
-                        category            : "hyperv.network.${cloud.id}.${server.id}",
-                        networkSubnetType   : subnetType,
-                        code                : "hyperv.network.${cloud.id}.${server.id}.${cloudItem.name}",
-                        name                : cloudItem.name,
-                        externalId          : cloudItem.name,
-                        refType             : 'ComputeServer',
-                        refId               : server.id,
-                        description         : cloudItem.name
-                ]
+            // Perform bulk create of networks
+            if (networkAdds.size() > 0) {
+                morpheusContext.async.cloud.network.bulkCreate(networkAdds).blockingGet()
 
-                def addSubnet = new NetworkSubnet(subnetConfig)
-                morpheusContext.async.networkSubnet.create([addSubnet], networkAdd).blockingGet()
-                morpheusContext.async.cloud.network.save(networkAdd).blockingGet()
+                // Now add subnets to the created networks
+                networkAdds.each { networkAdd ->
+                    def cloudItem = addList.find { it.name == networkAdd.name } // Find corresponding cloud item
+
+                    if (cloudItem) {
+                        def subnetConfig = [
+                                account             : server.account,
+                                category            : "hyperv.network.${cloud.id}.${server.id}",
+                                networkSubnetType   : subnetType,
+                                code                : "hyperv.network.${cloud.id}.${server.id}.${cloudItem.name}",
+                                name                : cloudItem.name,
+                                externalId          : cloudItem.name,
+                                refType             : 'ComputeServer',
+                                refId               : server.id,
+                                description         : cloudItem.name
+                        ]
+                        def addSubnet = new NetworkSubnet(subnetConfig)
+                        // Create subnet for the network
+                        morpheusContext.async.networkSubnet.create([addSubnet], networkAdd).blockingGet()
+                    }
+                }
+
+                // Perform bulk save of networks
+                morpheusContext.async.cloud.network.bulkSave(networkAdds).blockingGet()
             }
         } catch (e) {
             log.error "Error in adding Network sync ${e}", e
