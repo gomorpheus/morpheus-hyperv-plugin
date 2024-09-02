@@ -249,10 +249,11 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	ServiceResponse startWorkload(Workload workload) {
+		log.debug ("startWorkload: ${workload?.id}")
 		def rtn = ServiceResponse.prepare()
 		try {
 			if (workload.server?.externalId) {
-				def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(workload)
+				def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(context, workload)
 				def results = apiService.startServer(hypervOpts, hypervOpts.name)
 				if (results.success == true) {
 					rtn.success = true
