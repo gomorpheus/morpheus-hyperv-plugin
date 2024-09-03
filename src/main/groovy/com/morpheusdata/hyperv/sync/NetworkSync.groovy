@@ -94,10 +94,10 @@ class NetworkSync {
 
             // Perform bulk create of networks
             if (networkAdds.size() > 0) {
-                morpheusContext.async.cloud.network.bulkCreate(networkAdds).blockingGet()
+                def result = morpheusContext.async.cloud.network.bulkCreate(networkAdds).blockingGet()
 
                 // Now add subnets to the created networks
-                networkAdds.each { networkAdd ->
+                result.persistedItems.each { networkAdd ->
                     def cloudItem = addList.find { it.name == networkAdd.name } // Find corresponding cloud item
 
                     if (cloudItem) {
@@ -117,9 +117,6 @@ class NetworkSync {
                         morpheusContext.async.networkSubnet.create([addSubnet], networkAdd).blockingGet()
                     }
                 }
-
-                // Perform bulk save of networks
-                morpheusContext.async.cloud.network.bulkSave(networkAdds).blockingGet()
             }
         } catch (e) {
             log.error "Error in adding Network sync ${e}", e
