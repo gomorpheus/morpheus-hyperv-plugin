@@ -15,9 +15,10 @@ import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
 
 @Slf4j
-class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, ProvisionProvider.HypervisorProvisionFacet {
+class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, ProvisionProvider.HypervisorProvisionFacet, ProvisionProvider.BlockDeviceNameFacet {
 	public static final String PROVIDER_CODE = 'hyperv.provision'
 	public static final String PROVISION_PROVIDER_CODE = 'hyperv'
+	public static final diskNames = ['sda', 'sdb', 'sdc', 'sdd', 'sde', 'sdf', 'sdg', 'sdh', 'sdi', 'sdj', 'sdk', 'sdl']
 
 	protected MorpheusContext context
 	protected Plugin plugin
@@ -404,5 +405,10 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	String getName() {
 		return 'Hyper-V Provisioning'
+	}
+
+	@Override
+	String[] getDiskNameList() {
+		return diskNames
 	}
 }
