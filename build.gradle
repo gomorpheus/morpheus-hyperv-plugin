@@ -89,7 +89,7 @@ jar {
 				'Morpheus-Logo-Dark': 'assets/hyperv.svg',
 				'Morpheus-Labels': 'Plugin',
 				'Morpheus-Repo': 'https://github.com/gomorpheus/example',
-				'Morpheus-Min-Appliance-Version': "6.3.0"
+				'Morpheus-Min-Appliance-Version': "7.0.6"
 		)
 	}
 }

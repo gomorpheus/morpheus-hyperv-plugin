@@ -3,32 +3,75 @@ package com.morpheusdata.hyperv
 import com.morpheusdata.core.AbstractProvisionProvider
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
+import com.morpheusdata.core.providers.ProvisionProvider
 import com.morpheusdata.core.providers.WorkloadProvisionProvider
-import com.morpheusdata.model.ComputeServer
-import com.morpheusdata.model.Icon
-import com.morpheusdata.model.OptionType
-import com.morpheusdata.model.ServicePlan
-import com.morpheusdata.model.StorageVolumeType
-import com.morpheusdata.model.Workload
+import com.morpheusdata.hyperv.utils.HypervOptsUtility
+import com.morpheusdata.model.*
 import com.morpheusdata.model.provisioning.WorkloadRequest
+import com.morpheusdata.response.InitializeHypervisorResponse
 import com.morpheusdata.response.PrepareWorkloadResponse
 import com.morpheusdata.response.ProvisionResponse
 import com.morpheusdata.response.ServiceResponse
+import groovy.util.logging.Slf4j
 
-class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider {
+@Slf4j
+class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, ProvisionProvider.HypervisorProvisionFacet {
 	public static final String PROVIDER_CODE = 'hyperv.provision'
 	public static final String PROVISION_PROVIDER_CODE = 'hyperv'
 
 	protected MorpheusContext context
 	protected Plugin plugin
+	private HyperVApiService apiService
 
-	public HyperVProvisionProvider(Plugin plugin, MorpheusContext ctx) {
+	public HyperVProvisionProvider(Plugin plugin, MorpheusContext context) {
 		super()
-		this.@context = ctx
+		this.@context = context
 		this.@plugin = plugin
+		this.apiService = new HyperVApiService(context)
 	}
 
 	/**
+	 * Initialize a compute server as a Hypervisor. Common attributes defined in the {@link InitializeHypervisorResponse} will be used
+	 * to update attributes on the hypervisor, including capacity information. Additional details can be updated by the plugin provider
+	 * using the `context.services.computeServer.save(server)` API.
+	 * @param cloud cloud associated to the hypervisor
+	 * @param server representing the hypervisor
+	 * @return a {@link ServiceResponse} containing an {@link InitializeHypervisorResponse}. The response attributes will be
+	 * used to fill in necessary attributes of the server.
+	 */
+	@Override
+	ServiceResponse<InitializeHypervisorResponse> initializeHypervisor(Cloud cloud, ComputeServer server) {
+		log.debug("initializeHypervisor: cloud: {}, server: {}", cloud, server)
+		ServiceResponse<InitializeHypervisorResponse> rtn = new ServiceResponse<>(new InitializeHypervisorResponse())
+		try {
+			def opts = HypervOptsUtility.getHypervHypervisorOpts(server)
+			def serverInfo = apiService.getHypervServerInfo(opts)
+			log.debug("serverInfo: ${serverInfo}")
+			if (serverInfo.success == true && serverInfo.hostname) {
+				server.hostname = serverInfo.hostname
+			}
+			def maxStorage = serverInfo?.disks ? serverInfo?.disks.toLong() : 0
+			def maxMemory = serverInfo?.memory ? serverInfo?.memory.toLong() : 0
+			def usedStorage = 0
+			def maxCores = 1
+
+			rtn.data.serverOs = new OsType(code: 'windows.server.2012')
+			rtn.data.commType = 'winrm' //ssh, minrm
+			rtn.data.maxMemory = maxMemory
+			rtn.data.maxCores = maxCores
+			rtn.data.maxStorage = maxStorage
+			rtn.success = true
+			if (server.agentInstalled != true) {
+				def prepareResults = apiService.prepareNode(opts)
+			}
+		} catch (e) {
+			log.error("initialize hypervisor error:${e}", e)
+		}
+		return rtn
+	}
+
+
+/**
 	 * This method is called before runWorkload and provides an opportunity to perform action or obtain configuration
 	 * that will be needed in runWorkload. At the end of this method, if deploying a ComputeServer with a VirtualImage,
 	 * the sourceImage on ComputeServer should be determined and saved.
@@ -180,7 +223,23 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	ServiceResponse stopWorkload(Workload workload) {
-		return ServiceResponse.success()
+		def rtn = ServiceResponse.prepare()
+		try {
+			if (workload.server?.externalId) {
+				def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(context, workload)
+				def results = apiService.stopServer(hypervOpts, hypervOpts.name)
+				if (results.success == true) {
+					rtn.success = true
+				}
+			} else {
+				rtn.success = false
+				rtn.msg = 'externalId not found'
+			}
+		} catch (e) {
+			log.error("stopWorkload error: ${e}", e)
+			rtn.msg = e.message
+		}
+		return rtn
 	}
 
 	/**
@@ -190,7 +249,24 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	ServiceResponse startWorkload(Workload workload) {
-		return ServiceResponse.success()
+		log.debug ("startWorkload: ${workload?.id}")
+		def rtn = ServiceResponse.prepare()
+		try {
+			if (workload.server?.externalId) {
+				def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(context, workload)
+				def results = apiService.startServer(hypervOpts, hypervOpts.name)
+				if (results.success == true) {
+					rtn.success = true
+				}
+			} else {
+				rtn.success = false
+				rtn.msg = 'externalId not found'
+			}
+		} catch (e) {
+			log.error("startWorkload error: ${e}", e)
+			rtn.msg = e.message
+		}
+		return rtn
 	}
 
 	/**
@@ -247,7 +323,22 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	ServiceResponse stopServer(ComputeServer computeServer) {
-		return ServiceResponse.success()
+		def rtn = [success: false, msg: null]
+		try {
+			if (computeServer?.externalId){
+				def hypervOpts = HypervOptsUtility.getAllHypervServerOpts(context, computeServer)
+				def stopResults = apiService.stopServer(hypervOpts, hypervOpts.name)
+				if(stopResults.success == true){
+					rtn.success = true
+				}
+			} else {
+				rtn.msg = 'vm not found'
+			}
+		} catch(e) {
+			log.error("stopServer error: ${e}", e)
+			rtn.msg = e.message
+		}
+		return new ServiceResponse(rtn)
 	}
 
 	/**
@@ -257,7 +348,22 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	ServiceResponse startServer(ComputeServer computeServer) {
-		return ServiceResponse.success()
+		log.debug("startServer: computeServer.id: ${computeServer?.id}")
+		def rtn = ServiceResponse.prepare()
+		try {
+			if (computeServer?.externalId) {
+				def hypervOpts = HypervOptsUtility.getAllHypervServerOpts(context, computeServer)
+				def results = apiService.startServer(hypervOpts, hypervOpts.name)
+				if (results.success == true) {
+					rtn.success = true
+				}
+			} else {
+				rtn.msg = 'externalId not found'
+			}
+		} catch (e) {
+			log.error("startServer error:${e}", e)
+		}
+		return rtn
 	}
 
 	/**

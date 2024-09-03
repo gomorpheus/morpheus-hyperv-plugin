@@ -1,7 +1,6 @@
 package com.morpheusdata.hyperv
 
 import com.morpheusdata.core.MorpheusContext
-import com.morpheusdata.model.ComputeServer
 import groovy.json.JsonOutput
 import groovy.util.logging.Slf4j
 
@@ -420,7 +419,7 @@ class HyperVApiService {
         log.debug("getHypervHost command: ${command}")
         def results = executeCommand(command, opts)
         log.debug("getHypervHost: ${results}")
-        if (results.success == true && results.exitValue == 0) {
+        if (results.success == true && results.exitCode == '0') {
             rtn.host = parseHypervListData(results.data)
             rtn.success = true
         }
@@ -472,8 +471,8 @@ class HyperVApiService {
 
     }
 
-    def listVmSwitches(hypervOpts, opts) {
-        log.debug ("listVmSwitches hypervOpts: {}, opts: {}", hypervOpts, opts)
+    def listVmSwitches(opts) {
+        log.debug ("listVmSwitches hypervOpts: {}, opts: {}", opts)
         def rtn = [success: false, bridgeList: []]
         def command = 'Get-VMSwitch | Format-Table'
         log.debug("listVmSwitches: command: ${command}")
@@ -546,12 +545,11 @@ class HyperVApiService {
         return rtn
     }
 
-    def listVirtualMachines(opts) {
+    def listVirtualMachines(opts, Integer pageSize = 50, Integer maxResult = null) {
         def rtn = [success: false, virtualMachines: []]
 
 
         def hasMore = true
-        def pageSize = 50
         def fetch = { offset ->
 
             def commandStr = """\$report = @()"""
@@ -615,9 +613,12 @@ class HyperVApiService {
             def out = wrapExecuteCommand(command, opts)
             log.debug("out: ${out.data}")
             if (out.success) {
-                hasMore = out.data != ''
+                hasMore = (out.data != '' && out.data != null)
                 if (out.data) {
                     rtn.virtualMachines += out.data
+                }
+                if (maxResult && hasMore && rtn.virtualMachines.size() >= maxResult) {
+                    hasMore = false
                 }
                 rtn.success = true
             } else {
@@ -630,7 +631,6 @@ class HyperVApiService {
             fetch(currentOffset)
             currentOffset += pageSize
         }
-
         return rtn
     }
 
@@ -697,7 +697,7 @@ class HyperVApiService {
         try {
             def command = "Stop-VM -Name \"${vmId}\" -Force${opts.turnOff ? ' -TurnOff' : ''}"
             def out = executeCommand(command, opts)
-            rtn.success = out.success && out.exitValue == 0
+            rtn.success = out.success && out.exitCode == '0'
             println("stop server: ${out}")
         } catch (e) {
             log.error("startServer error: ${e}", e)
