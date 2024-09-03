@@ -306,7 +306,22 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	ServiceResponse stopServer(ComputeServer computeServer) {
-		return ServiceResponse.success()
+		def rtn = [success: false, msg: null]
+		try {
+			if (computeServer?.externalId){
+				def hypervOpts = HypervOptsUtility.getAllHypervServerOpts(context, computeServer)
+				def stopResults = apiService.stopServer(hypervOpts, hypervOpts.name)
+				if(stopResults.success == true){
+					rtn.success = true
+				}
+			} else {
+				rtn.msg = 'vm not found'
+			}
+		} catch(e) {
+			log.error("stopServer error: ${e}", e)
+			rtn.msg = e.message
+		}
+		return new ServiceResponse(rtn)
 	}
 
 	/**
