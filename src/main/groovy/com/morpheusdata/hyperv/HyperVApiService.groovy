@@ -33,18 +33,27 @@ class HyperVApiService {
     }
 
     def insertContainerImage(opts) {
+        log.info ("Ray :: insertContainerImage: opts: ${opts}")
         def rtn = [success: false, imageExists: false]
         def zoneRoot = opts.zoneRoot ?: defaultRoot
+        log.info ("Ray :: insertContainerImage: zoneRoot: ${zoneRoot}")
         def image = opts.image
         def imageName = image.name
+        log.info ("Ray :: insertContainerImage: imageName: ${imageName}")
         def imageFolderName = formatImageFolder(imageName)
+        log.info ("Ray :: insertContainerImage: imageFolderName: ${imageFolderName}")
         def tgtFolder = "${zoneRoot}\\images\\${imageFolderName}"
+        log.info ("Ray :: insertContainerImage: tgtFolder: ${tgtFolder}")
         def match = findImage(opts, imageName)
+        log.info ("Ray :: insertContainerImage: match: ${match}")
         log.info("findImage: ${match}")
+        log.info ("Ray :: insertContainerImage: match.imageExists: ${match.imageExists}")
         if (match.imageExists == false) {
             //transfer it to host
             def transferResults = transferImage(opts, image.cloudFiles, imageName)
+            log.info ("Ray :: insertContainerImage: transferResults: ${transferResults}")
             log.debug "transferImage: ${transferResults}"
+            log.info ("Ray :: insertContainerImage: transferResults.success: ${transferResults.success}")
             if (transferResults.success == true) {
                 //clone it to vm folder
                 rtn.image = [path: tgtFolder, name: imageName]
@@ -58,30 +67,46 @@ class HyperVApiService {
             rtn.imageId = tgtFolder
             rtn.success = true
         }
+        log.info ("Ray :: insertContainerImage: rtn: ${rtn}")
         return rtn
     }
 
     def transferImage(opts, cloudFiles, imageName) {
+        log.info ("Ray :: transferImage: opts: ${opts}")
+        log.info ("Ray :: transferImage: cloudFiles: ${cloudFiles}")
+        log.info ("Ray :: transferImage: imageName: ${imageName}")
         def rtn = [success: false, results: []]
         def metadataFile = cloudFiles?.findAll { cloudFile -> cloudFile.name == 'metadata.json' }
+        log.info ("Ray :: transferImage: metadataFile?.size(): ${metadataFile?.size()}")
         def vhdFiles = cloudFiles?.findAll { cloudFile -> cloudFile.name.indexOf('.vhd') > -1 || cloudFile.name.indexOf('.vhdx') }
+        log.info ("Ray :: transferImage: vhdFiles: ${vhdFiles}")
+        log.info ("Ray :: transferImage: vhdFiles?.size(): ${vhdFiles?.size()}")
         log.info("vhdFiles: ${vhdFiles}")
         def zoneRoot = opts.zoneRoot ?: defaultRoot
+        log.info ("Ray :: transferImage: zoneRoot: ${zoneRoot}")
         def imageFolderName = formatImageFolder(imageName)
+        log.info ("Ray :: transferImage: imageFolderName: ${imageFolderName}")
         def fileList = []
         def tgtFolder = "${zoneRoot}\\images\\${imageFolderName}"
+        log.info ("Ray :: transferImage: tgtFolder: ${tgtFolder}")
         opts.targetImageFolder = tgtFolder
         def cachePath = opts.cachePath
         def command = "mkdir \"${tgtFolder}\""
+        log.info ("Ray :: transferImage: command: ${command}")
         log.debug("command: ${command}")
         def dirResults = executeCommand(command, opts)
 
+        log.info ("Ray :: transferImage: dirResults: ${dirResults}")
+        log.info ("Ray :: transferImage: metadataFile: ${metadataFile}")
         if (metadataFile) {
             def tgtUrl = morpheusContext.services.virtualImage.getCloudFileStreamUrl(opts.image, metadataFile, opts.user, opts.zone)
+            log.info ("Ray :: transferImage: tgtUrl: ${tgtUrl}")
             tgtUrl = tgtUrl.replace("https", "http")
+            log.info ("Ray :: transferImage: tgtUrl1: ${tgtUrl}")
             log.debug("metadata url: ${tgtUrl}")
             fileList << [inline    : true, action: 'download', content: tgtUrl.bytes.encodeAsBase64(),
                          targetPath: "${tgtFolder}\\metadata.json".toString()]
+            log.info ("Ray :: transferImage: fileList: ${fileList}")
         }
         vhdFiles.each { vhdFile ->
             def tgtFilename = extractImageFileName(vhdFile.name)
@@ -96,6 +121,7 @@ class HyperVApiService {
             rtn.success = fileResults?.success == true
         }
 
+        log.info ("Ray :: transferImage: rtn: ${rtn}")
         return rtn
     }
 
@@ -129,19 +155,30 @@ class HyperVApiService {
     }
 
     def findImage(opts, imageName) {
+        log.info ("Ray :: findImage: opts: ${opts}")
+        log.info ("Ray :: findImage: imageName: ${imageName}")
         def rtn = [success: false, imageExists: false]
         def zoneRoot = opts.zoneRoot ?: defaultRoot
+        log.info ("Ray :: findImage: zoneRoot: ${zoneRoot}")
         def imageFolder = formatImageFolder(imageName)
+        log.info ("Ray :: findImage: imageFolder: ${imageFolder}")
         def imageFolderPath = "${zoneRoot}\\images\\${imageFolder}"
+        log.info ("Ray :: findImage: imageFolderPath: ${imageFolderPath}")
         def command = "dir \"${imageFolderPath}\""
+        log.info ("Ray :: findImage: command: ${command}")
         log.debug("findImage command: ${command}")
         def out = executeCommand(command, opts)
+        log.info ("Ray :: findImage: out: ${out}")
+        log.info ("Ray :: findImage: out.success: ${out.success}")
+        log.info ("Ray :: findImage: out.data: ${out.data}")
         log.info("findImage: ${out.data}")
         rtn.success = out.success
+        log.info ("Ray :: findImage: out.data?.length(): ${out.data?.length()}")
         if (out.data?.length() > 0) {
             rtn.imageExists = true
             rtn.imageName = imageName
         }
+        log.info ("Ray :: findImage: rtn: ${rtn}")
         return rtn
     }
 
@@ -815,7 +852,7 @@ class HyperVApiService {
             def out = executeCommand(command, opts)
             command = "Export-VMSnapshot -Name \"${snapshotId}\" -VMName \"${vmId}\" -Path \"${tgtFolder}\""
             out = executeCommand(command, opts)
-            rtn.success = out.success && out.exitValue == 0
+            rtn.success = out.success && out.exitCode == '0'
             log.debug("export snapshot: ${out}")
             if (rtn.success) {
                 rtn.diskPath = "${tgtFolder}\\${vmId}\\Virtual Hard Disks"
