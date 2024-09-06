@@ -10,6 +10,7 @@ import com.morpheusdata.core.providers.CloudProvider
 import com.morpheusdata.core.providers.ProvisionProvider
 import com.morpheusdata.core.util.ConnectionUtils
 import com.morpheusdata.hyperv.sync.NetworkSync
+import com.morpheusdata.hyperv.sync.VirtualMachineSync
 import com.morpheusdata.hyperv.utils.HypervOptsUtility
 import com.morpheusdata.model.*
 import com.morpheusdata.request.ValidateCloudRequest
@@ -564,8 +565,10 @@ class HyperVCloudProvider implements CloudProvider {
 				def vmCacheOpts = [zone: cloud]
 				def doInventory = cloud.getConfigProperty('importExisting')
 				vmCacheOpts.createNew = (doInventory == 'on' || doInventory == 'true' || doInventory == true)
-				// TODO: cacheVirtualMachines need to be implemented with VM sync user story
-				// cacheVirtualMachines(vmCacheOpts, null, [virtualMachines: virtualMachineList, success: true])
+
+				def now = new Date().time
+				new VirtualMachineSync(context, cloud, apiService, this).execute()
+				log.debug("${cloud.name}: VirtualMachineSync in ${new Date().time - now}ms")
 				response.success = true
 			}
 			if (allOnline == true && anyOnline == true) {
