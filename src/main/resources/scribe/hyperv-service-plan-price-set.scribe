@@ -1,0 +1,36 @@
+resource "service-plan-price-set" "hyperv-512" {
+  servicePlan           = "hyperv-512",
+  priceSet              = "default.priceset"
+}
+resource "service-plan-price-set" "hyperv-1024" {
+  servicePlan           = "hyperv-1024",
+  priceSet              = "default.priceset"
+}
+resource "service-plan-price-set" "hyperv-2048" {
+  servicePlan           = "hyperv-2048",
+  priceSet              = "default.priceset"
+}
+resource "service-plan-price-set" "hyperv-4096" {
+  servicePlan           = "hyperv-4096",
+  priceSet              = "default.priceset"
+}
+resource "service-plan-price-set" "hyperv-8192" {
+  servicePlan           = "hyperv-8192",
+  priceSet              = "default.priceset"
+}
+resource "service-plan-price-set" "hyperv-16384" {
+  servicePlan           = "hyperv-16384",
+  priceSet              = "default.priceset"
+}
+resource "service-plan-price-set" "hyperv-24576" {
+  servicePlan           = "hyperv-24576",
+  priceSet              = "default.priceset"
+}
+resource "service-plan-price-set" "hyperv-32768" {
+  servicePlan           = "hyperv-32768",
+  priceSet              = "default.priceset"
+}
+resource "service-plan-price-set" "hyperv-hypervisor" {
+  servicePlan           = "hyperv-hypervisor",
+  priceSet              = "hyperv-hypervisor.priceset"
+}

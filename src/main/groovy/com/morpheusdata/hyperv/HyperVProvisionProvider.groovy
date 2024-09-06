@@ -26,7 +26,8 @@ import groovy.util.logging.Slf4j
 class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, HostProvisionProvider, ProvisionProvider.BlockDeviceNameFacet, WorkloadProvisionProvider.ResizeFacet, HostProvisionProvider.ResizeFacet, WorkloadProvisionProvider.ImportWorkloadFacet, ProvisionProvider.HypervisorProvisionFacet {
 
 	public static final String PROVIDER_CODE = 'hyperv.provision'
-	public static final String PROVISION_PROVIDER_CODE = 'hyperv'
+	public static final String PROVISION_TYPE_CODE = 'hyperv'
+	public static final diskNames = ['sda', 'sdb', 'sdc', 'sdd', 'sde', 'sdf', 'sdg', 'sdh', 'sdi', 'sdj', 'sdk', 'sdl']
 
 	protected MorpheusContext context
 	protected HyperVPlugin plugin
@@ -81,23 +82,23 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 
 
 /**
-	 * This method is called before runWorkload and provides an opportunity to perform action or obtain configuration
-	 * that will be needed in runWorkload. At the end of this method, if deploying a ComputeServer with a VirtualImage,
-	 * the sourceImage on ComputeServer should be determined and saved.
-	 * @param workload the Workload object we intend to provision along with some of the associated data needed to determine
-	 *                 how best to provision the workload
-	 * @param workloadRequest the RunWorkloadRequest object containing the various configurations that may be needed
-	 *                        in running the Workload. This will be passed along into runWorkload
-	 * @param opts additional configuration options that may have been passed during provisioning
-	 * @return Response from API
-	 */
+ * This method is called before runWorkload and provides an opportunity to perform action or obtain configuration
+ * that will be needed in runWorkload. At the end of this method, if deploying a ComputeServer with a VirtualImage,
+ * the sourceImage on ComputeServer should be determined and saved.
+ * @param workload the Workload object we intend to provision along with some of the associated data needed to determine
+ *                 how best to provision the workload
+ * @param workloadRequest the RunWorkloadRequest object containing the various configurations that may be needed
+ *                        in running the Workload. This will be passed along into runWorkload
+ * @param opts additional configuration options that may have been passed during provisioning
+ * @return Response from API
+ */
 	@Override
 	ServiceResponse<PrepareWorkloadResponse> prepareWorkload(Workload workload, WorkloadRequest workloadRequest, Map opts) {
 		ServiceResponse<PrepareWorkloadResponse> resp = new ServiceResponse<PrepareWorkloadResponse>(
-			true, // successful
-			'', // no message
-			null, // no errors
-			new PrepareWorkloadResponse(workload:workload) // adding the workload to the response for convenience
+				true, // successful
+				'', // no message
+				null, // no errors
+				new PrepareWorkloadResponse(workload:workload) // adding the workload to the response for convenience
 		)
 		return resp
 	}
@@ -109,7 +110,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	String getProvisionTypeCode() {
-		return PROVISION_PROVIDER_CODE
+		return PROVISION_TYPE_CODE
 	}
 
 	/**
@@ -131,7 +132,28 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	Collection<OptionType> getOptionTypes() {
 		Collection<OptionType> options = []
-		// TODO: create some option types for provisioning and add them to collection
+		options << new OptionType(
+				name: 'skip agent install',
+				code: 'provisionType.hyperv.noAgent',
+				category: 'provisionType.hyperv',
+				inputType: OptionType.InputType.CHECKBOX,
+				fieldName: 'noAgent',
+				fieldContext: 'config',
+				fieldCode: 'gomorpheus.optiontype.SkipAgentInstall',
+				fieldLabel: 'Skip Agent Install',
+				fieldGroup:'Advanced Options',
+				displayOrder: 4,
+				required: false,
+				enabled: true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'Skipping Agent installation will result in a lack of logging and guest operating system statistics. Automation scripts may also be adversely affected.',
+				defaultValue:null,
+				custom:false,
+				fieldClass:null
+		)
+
 		return options
 	}
 
@@ -143,6 +165,199 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	Collection<OptionType> getNodeOptionTypes() {
 		Collection<OptionType> nodeOptions = []
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.template',
+				inputType: OptionType.InputType.SELECT,
+				name:'template',
+				category:'provisionType.hyperv',
+				fieldName:'template',
+				fieldCode: 'gomorpheus.optiontype.Template',
+				fieldLabel:'Template',
+				fieldContext:'config',
+				fieldGroup:'Options',
+				required:false,
+				enabled:true,
+				optionSource:'hypervImage',
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:null,
+				custom:false,
+				displayOrder:8,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.port',
+				inputType: OptionType.InputType.TEXT,
+				name:'port',
+				category:'provisionType.hyperv',
+				fieldName:'port',
+				fieldCode: 'gomorpheus.optiontype.Ports',
+				fieldLabel:'Ports',
+				fieldContext:'config',
+				fieldGroup:'Options',
+				required:false,
+				enabled:true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:null,
+				custom:false,
+				displayOrder:9,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.host',
+				inputType: OptionType.InputType.SELECT,
+				name:'host',
+				category:'provisionType.hyperv',
+				fieldName:'hypervHostId',
+				fieldCode: 'gomorpheus.optiontype.Host',
+				fieldLabel:'Host',
+				fieldContext:'config',
+				fieldGroup:'Options',
+				required:true,
+				enabled:true,
+				optionSource:'hypervHost',
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:null,
+				custom:false,
+				displayOrder:10,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.custom.containerType.virtualImageId',
+				inputType: OptionType.InputType.SELECT,
+				name:'virtual image',
+				category:'provisionType.hyperv.custom',
+				optionSource:'hypervVirtualImages',
+				fieldName:'virtualImageId',
+				fieldCode: 'gomorpheus.optiontype.VirtualImage',
+				fieldLabel:'Virtual Image',
+				fieldContext:'containerType',
+				fieldGroup:'Hyper-V VM Options',
+				required:true,
+				enabled:true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:null,
+				custom:false,
+				displayOrder:1,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.custom.containerType.config.logVolume',
+				inputType: OptionType.InputType.TEXT,
+				name:'log volume',
+				category:'provisionType.hyperv.custom',
+				fieldName:'logVolume',
+				fieldCode: 'gomorpheus.optiontype.LogVolume',
+				fieldLabel:'Log Volume',
+				fieldContext:'containerType.config',
+				fieldGroup:'Hyper-V VM Options',
+				required:false,
+				enabled:true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:null,
+				custom:false,
+				displayOrder:2,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.custom.instanceType.backupType',
+				inputType: OptionType.InputType.HIDDEN,
+				name:'backup type',
+				category:'provisionType.hyperv.custom',
+				fieldName:'backupType',
+				fieldCode: 'gomorpheus.optiontype.BackupType',
+				fieldLabel:'Backup Type',
+				fieldContext:'instanceType',
+				fieldGroup:'Hyper-V VM Options',
+				required:false,
+				enabled:true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:'hypervSnapshot',
+				custom:false,
+				displayOrder:4,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.custom.containerType.statTypeCode',
+				inputType: OptionType.InputType.HIDDEN,
+				name:'stat type code',
+				category:'provisionType.hyperv.custom',
+				fieldName:'statTypeCode',
+				fieldCode: 'gomorpheus.optiontype.StatTypeCode',
+				fieldLabel:'Stat Type Code',
+				fieldContext:'containerType',
+				fieldGroup:'Hyper-V VM Options',
+				required:false,
+				enabled:true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:'hyperv',
+				custom:false,
+				displayOrder:6,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.custom.containerType.logTypeCode',
+				inputType: OptionType.InputType.HIDDEN,
+				name:'log type code',
+				category:'provisionType.hyperv.custom',
+				fieldName:'logTypeCode',
+				fieldCode: 'gomorpheus.optiontype.LogTypeCode',
+				fieldLabel:'Log Type Code',
+				fieldContext:'containerType',
+				fieldGroup:'Hyper-V VM Options',
+				required:false,
+				enabled:true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:'hyperv',
+				custom:false,
+				displayOrder:7,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.custom.instanceTypeLayout.description',
+				inputType: OptionType.InputType.HIDDEN,
+				name:'layout description',
+				category:'provisionType.hyperv.custom',
+				fieldName:'description',
+				fieldCode: 'gomorpheus.optiontype.LayoutDescription',
+				fieldLabel:'Layout Description',
+				fieldContext:'instanceTypeLayout',
+				fieldGroup:'Hyper-V VM Options',
+				required:false,
+				enabled:true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:'This will provision a single vm container',
+				custom:false,
+				displayOrder:9,
+				fieldClass:null
+		)
+
 		return nodeOptions
 	}
 
@@ -152,9 +367,8 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	Collection<StorageVolumeType> getRootVolumeStorageTypes() {
-		Collection<StorageVolumeType> volumeTypes = []
-		// TODO: create some storage volume types and add to collection
-		return volumeTypes
+		context.async.storageVolume.storageVolumeType.list(
+				new DataQuery().withFilter("code", "standard")).toList().blockingGet()
 	}
 
 	/**
@@ -163,9 +377,8 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	Collection<StorageVolumeType> getDataVolumeStorageTypes() {
-		Collection<StorageVolumeType> dataVolTypes = []
-		// TODO: create some data volume types and add to collection
-		return dataVolTypes
+		context.async.storageVolume.storageVolumeType.list(
+				new DataQuery().withFilter("code", "standard")).toList().blockingGet()
 	}
 
 	/**
@@ -176,9 +389,45 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	Collection<ServicePlan> getServicePlans() {
-		Collection<ServicePlan> plans = []
-		// TODO: create some service plans (sizing like cpus, memory, etc) and add to collection
-		return plans
+		def servicePlans = []
+
+		servicePlans << new ServicePlan([code:'hyperv-512', editable:true, name:'Hyper-V Nano (1 vCPU, 512MB Memory)', description:'Hyper-V Nano (1 vCPU, 512MB Memory)', sortOrder:0,
+										 maxCores:1, maxStorage:10l * 1024l * 1024l * 1024l, maxMemory: 1l * 512l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-1024', editable:true, name:'1 Core, 1GB Memory', description:'1 Core, 1GB Memory', sortOrder:1,
+										 maxCores:1, maxStorage: 10l * 1024l * 1024l * 1024l, maxMemory: 1l * 1024l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-2048', editable:true, name:'1 Core, 2GB Memory', description:'1 Core, 2GB Memory', sortOrder:2,
+										 maxCores:1, maxStorage: 20l * 1024l * 1024l * 1024l, maxMemory: 2l * 1024l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-4096', editable:true, name:'1 Core, 4GB Memory', description:'1 Core, 4GB Memory', sortOrder:3,
+										 maxCores:1, maxStorage: 40l * 1024l * 1024l * 1024l, maxMemory: 4l * 1024l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-8192', editable:true, name:'2 Core, 8GB Memory', description:'2 Core, 8GB Memory', sortOrder:4,
+										 maxCores:2, maxStorage: 80l * 1024l * 1024l * 1024l, maxMemory: 8l * 1024l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-16384', editable:true, name:'2 Core, 16GB Memory', description:'2 Core, 16GB Memory', sortOrder:5,
+										 maxCores:2, maxStorage: 160l * 1024l * 1024l * 1024l, maxMemory: 16l * 1024l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-24576', editable:true, name:'4 Core, 24GB Memory', description:'4 Core, 24GB Memory', sortOrder:6,
+										 maxCores:4, maxStorage: 240l * 1024l * 1024l * 1024l, maxMemory: 24l * 1024l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-32768', editable:true, name:'4 Core, 32GB Memory', description:'4 Core, 32GB Memory', sortOrder:7,
+										 maxCores:4, maxStorage: 320l * 1024l * 1024l * 1024l, maxMemory: 32l * 1024l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-hypervisor', editable:false, name:'Hyperv hypervisor', description:'custom hypervisor plan', sortOrder:100, hidden:true,
+										 maxCores:1, maxCpu:1, maxStorage:20l * 1024l * 1024l * 1024l, maxMemory:(long)(1l * 1024l * 1024l * 1024l), active:true,
+										 customCores:true, customMaxStorage:true, customMaxDataStorage:true, customMaxMemory:true])
+
+		servicePlans
 	}
 
 	/**
@@ -249,7 +498,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			log.info ("Ray :: runWorkload: containerConfig.imageId: ${containerConfig.imageId}")
 			log.info ("Ray :: runWorkload: containerConfig.template: ${containerConfig.template}")
 			log.info ("Ray :: runWorkload: server.sourceImage?.id: ${server.sourceImage?.id}")
-			if(containerConfig.imageId || containerConfig.template || server.sourceImage?.id/*container.containerType.virtualImage?.id*/) {
+			if(containerConfig.imageId || containerConfig.template || workload.workloadType.virtualImage?.id) {
 				//def virtualImageId = (containerConfig.imageId?.toLong() ?: containerConfig.template?.toLong() ?: container.containerType.virtualImage.id)
 				def virtualImageId = (containerConfig.imageId?.toLong() ?: containerConfig.template?.toLong() ?: server.sourceImage.id)
 				log.info ("Ray :: runWorkload: virtualImageId: ${virtualImageId}")
@@ -275,7 +524,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					}
 					def containerImage =
 							[
-									name			: virtualImage.name, // ?: workload.containerType.imageCode, // check:
+									name			: virtualImage.name ?: workload.workloadType.imageCode, // check:
 									minDisk			: 5,
 									minRam			: 512 * ComputeUtility.ONE_MEGABYTE,
 									virtualImageId	: virtualImage.id,
@@ -296,7 +545,8 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					if(imageResults.success == true) {
 						log.info ("Ray :: runWorkload: imageResults.imageId: ${imageResults.imageId}")
 						imageId = imageResults.imageId
-						//virtualImageService.addVirtualImageLocation(virtualImage, imageId, opts.zone.id) // check:
+						//virtualImageService.addVirtualImageLocation(virtualImage, imageId, opts.zone.id) // check: same as imagesync
+
 					}
 				}
 				log.info ("Ray :: runWorkload: imageId1: ${imageId}")
@@ -346,7 +596,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				String platform = (virtualImage.osType?.platform == 'windows' ? 'windows' : 'linux') ?: virtualImage.platform
 				server.osType = platform
 				//def newType = findVmNodeZoneType(opts.server.zone.zoneType, opts.server.osType) // check: provisionTypeCode
-				def newType = this.findVmNodeServerTypeForCloud(cloud.id, server.osType, 'hyperv-provision-provider')
+				def newType = this.findVmNodeServerTypeForCloud(cloud.id, server.osType, 'hyperv')
 				if(newType && server.computeServerType != newType){
 					server.computeServerType = newType
 				}
@@ -359,13 +609,15 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				}
 				hypervOpts.secureBoot = virtualImage?.uefi ?: false
 				hypervOpts.imageId = imageId
-				// hypervOpts.diskMap = virtualImageService.getImageDiskMap(virtualImage) // check: how to get disk map
+				//hypervOpts.diskMap = virtualImageService.getImageDiskMap(virtualImage) // check: how to get disk map
 				hypervOpts += HypervOptsUtility.getHypervWorkloadOpts(context, workload)
 				hypervOpts.networkConfig = opts.networkConfig
 				*//*def cloudConfigOpts = buildCloudConfigOpts(opts.zone, opts.server, opts.installAgent, [doPing:true, sendIp:true, apiKey:opts.server.apiKey,
 																									   applianceIp:MorpheusUtils.getUrlHost(applianceServerUrl), hostname:opts.server.getExternalHostname(), applianceUrl:applianceServerUrl,
 																									   hostname:container.server.getExternalHostname(), hosts:container.server.getExternalHostname(), disableCloudInit:true, timezone: containerConfig.timezone])*//*
 				// check: cloudConfigOpts
+				def isoBuffer = context.services.provision.buildIsoOutputStream(
+						opts.isSysprep, PlatformType.valueOf(hypervOpts.platform), hypervOpts.cloudConfigMeta, hypervOpts.cloudConfigUser, hypervOpts.cloudConfigNetwork)
 				if(virtualImage?.isCloudInit) {
 					//opts.installAgent = opts.installAgent && (cloudConfigOpts.installAgent != true) // check:
 					//morpheusComputeService.buildCloudNetworkConfig(hypervOpts.platform, virtualImage, cloudConfigOpts, hypervOpts.networkConfig)
@@ -373,8 +625,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					hypervOpts.cloudConfigMeta = workloadRequest?.cloudConfigMeta ?: null //morpheusComputeService.buildCloudMetaData(hypervOpts.platform, "morpheus-container-${container.id}", cloudConfigOpts.hostname, cloudConfigOpts)
 					hypervOpts.cloudConfigNetwork = workloadRequest?.cloudConfigNetwork ?: null
 					//def isoBuffer = IsoUtility.buildCloudIso(hypervOpts.platform, hypervOpts.cloudConfigMeta, hypervOpts.cloudConfigUser)
-					def isoBuffer = context.services.provision.buildIsoOutputStream(
-							opts.isSysprep, PlatformType.valueOf(hypervOpts.platform), hypervOpts.cloudConfigMeta, hypervOpts.cloudConfigUser, hypervOpts.cloudConfigNetwork)
+
 					hypervOpts.cloudConfigBytes = isoBuffer //isoBuffer.toByteArray()
 					server.cloudConfigUser = hypervOpts.cloudConfigUser
 					server.cloudConfigMeta = hypervOpts.cloudConfigMeta
@@ -419,7 +670,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					if(serverDetails.success == true) {
 						log.info("serverDetail: ${serverDetails}")
 						def newIpAddress = serverDetails.server?.ipAddress ?: createResults.server?.ipAddress
-						opts.network = applyComputeServerNetworkIp(opts.server, newIpAddress, newIpAddress, null, null, 0, [:]) // check:
+						//opts.network = applyComputeServerNetworkIp(opts.server, newIpAddress, newIpAddress, null, null, 0, [:]) // check: skip
 						server.osDevice = '/dev/sda'
 						server.dataDevice = '/dev/sda'
 						server.lvmEnabled = false
@@ -437,7 +688,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						server.powerState = ComputeServer.PowerState.on
 						context.async.computeServer.save(server).blockingGet()
 						provisionResponse.success = true
-						//instanceService.updateInstance(container.instance) // check:
+						//instanceService.updateInstance(container.instance) // check: skip
 					} else {
 						server.statusMessage = 'Failed to run server'
 						//context.async.computeServer.save(server).blockingGet()
@@ -478,23 +729,23 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 
 		// TODO: this is where you will implement the work to create the workload in your cloud environment
 		return new ServiceResponse<ProvisionResponse>(
-			true,
-			null, // no message
-			null, // no errors
-			new ProvisionResponse(success:true)
+				true,
+				null, // no message
+				null, // no errors
+				new ProvisionResponse(success:true)
 		)
 	}
 
 	def pickHypervHypervisor(Cloud cloud) {
 		def hypervisorList = context.services.computeServer.list(new DataQuery()
 				.withFilter('zone.id', cloud.id).withFilter('computeServerType.code', 'hypervHypervisor'))
-				/*ComputeServer.withCriteria {
-			eq('zone', zone)
-			computeServerType {
-				eq('code', 'hypervHypervisor')
-			}
-			maxResults(1)
-		}*/
+		/*ComputeServer.withCriteria {
+    eq('zone', zone)
+    computeServerType {
+        eq('code', 'hypervHypervisor')
+    }
+    maxResults(1)
+}*/
 		log.info ("Ray :: pickHypervHypervisor: hypervisorList?.size(): ${hypervisorList?.size()}")
 		return hypervisorList?.size() > 0 ? hypervisorList.first() : null
 	}
@@ -804,7 +1055,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	String[] getDiskNameList() {
-		return new String[0]
+		return diskNames
 	}
 
 	/**
@@ -835,4 +1086,80 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	ServiceResponse resizeWorkload(Instance instance, Workload workload, ResizeRequest resizeRequest, Map opts) {
 		return null
 	}
+
+	@Override
+	Boolean hasNetworks() {
+		return true
+	}
+
+	@Override
+	Boolean canAddVolumes() {
+		return true
+	}
+
+	@Override
+	Boolean canCustomizeRootVolume() {
+		return true
+	}
+
+	@Override
+	HostType getHostType() {
+		return HostType.vm
+	}
+
+	@Override
+	String serverType() {
+		return "vm"
+	}
+
+	@Override
+	Boolean supportsCustomServicePlans() {
+		return true;
+	}
+
+	@Override
+	Boolean multiTenant() {
+		return false
+	}
+
+	@Override
+	Boolean aclEnabled() {
+		return false
+	}
+
+	@Override
+	Boolean customSupported() {
+		return true;
+	}
+
+	@Override
+	Boolean lvmSupported() {
+		return true
+	}
+
+	@Override
+	String getDeployTargetService() {
+		return "vmDeployTargetService"
+	}
+
+	@Override
+	String getNodeFormat() {
+		return "vm"
+	}
+
+	@Override
+	Boolean hasSecurityGroups() {
+		return false
+	}
+
+	@Override
+	Boolean hasNodeTypes() {
+		return true;
+	}
+
+	@Override
+	String getHostDiskMode() {
+		return 'lvm'
+	}
+
 }
