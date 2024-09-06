@@ -722,7 +722,7 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	String getDefaultProvisionTypeCode() {
-		return HyperVProvisionProvider.PROVISION_PROVIDER_CODE
+		return HyperVProvisionProvider.PROVISION_TYPE_CODE
 	}
 
 	/**

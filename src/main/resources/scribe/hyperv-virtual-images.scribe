@@ -1,18 +1,38 @@
-resource "virtual-image" "hyperv-image-morpheus-ubuntu-16_04" {
-  code               = "hyperv.image.morpheus.ubuntu.16.04.3-v1.ubuntu.16.04.3.amd64"
+resource "virtual-image" "hyperv-image-morpheus-ubuntu-20_04" {
+  code               = "hyperv.image.morpheus.ubuntu.20.04.1-v1.ubuntu.20.04.1.amd64"
   category           = "hyperv.image.morpheus.ubuntu"
-  sshUsername        = "cloud-user"
+  sshUsername        = null
   sshPassword        = null
-  name               = "Morpheus Ubuntu 16.04.3 v1"
+  name               = "Morpheus Ubuntu 20.04.1 v1"
   imageType          = "vhd"
-  remotePath         = "https://s3-us-west-1.amazonaws.com/morpheus-images/vhd/ubuntu/ubuntu-16_04_3-v1-amd64/morpheus-ubuntu-16_04_3-v1-amd64.vhd"
-  imagePath          = "vhd/ubuntu/ubuntu-16_04_3-v1-amd64"
+  remotePath         = "https://s3-us-west-1.amazonaws.com/morpheus-images/hyperv/ubuntu/ubuntu-20_04_1-v1-amd64/morpheus-ubuntu-20_04-v1-amd64.vhd.tar.gz"
+  imagePath          = "hyperv/ubuntu/ubuntu-20_04_1-v1-amd64"
   systemImage        = true
   installAgent       = true
   computeServerImage = false
   isCloudInit        = true
   externalId         = null
-  osType             = "ubuntu.16.04.64"
+  osType             = "ubuntu.20.04.64"
+  active             = true
+  delete             = false
+  zoneType           = "hyperv"
+}
+
+resource "virtual-image" "hyperv-image-morpheus-ubuntu-18_04_20240604.amd64" {
+  code               = "hyperv.image.morpheus.ubuntu.18.04.3-v1.ubuntu.18.04.3.amd64"
+  category           = "hyperv.image.morpheus.ubuntu"
+  sshUsername        = null
+  sshPassword        = null
+  name               = "Morpheus Ubuntu 18.04.3 v1"
+  imageType          = "vhd"
+  remotePath         = "https://s3-us-west-1.amazonaws.com/morpheus-images/hyperv/ubuntu/ubuntu-18_04_3-v1-amd64/morpheus-ubuntu-18_04_3-v1-amd64.vhd.tar.gz"
+  imagePath          = "hyperv/ubuntu/ubuntu-18_04_3-v1-amd64"
+  systemImage        = true
+  installAgent       = true
+  computeServerImage = false
+  isCloudInit        = true
+  externalId         = null
+  osType             = "ubuntu.18.04.64"
   active             = true
   delete             = false
   zoneType           = "hyperv"
