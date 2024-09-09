@@ -972,6 +972,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	String getName() {
 		return 'Hyper-V Provisioning'
 	}
+
 /**
  * Validate the provided provisioning options for a Docker host server.  A return of success = false will halt the
  * creation and display errors
@@ -1046,16 +1047,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	ServiceResponse resizeServer(ComputeServer server, ResizeRequest resizeRequest, Map opts) {
 		return null
-	}
-
-	/**
-	 * Returns a String array of block device names i.e. (['vda','vdb','vdc']) in the order
-	 * of the disk index.
-	 * @return the String array
-	 */
-	@Override
-	String[] getDiskNameList() {
-		return diskNames
 	}
 
 	/**
@@ -1162,4 +1153,8 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		return 'lvm'
 	}
 
+	@Override
+	String[] getDiskNameList() {
+		return diskNames
+	}
 }
