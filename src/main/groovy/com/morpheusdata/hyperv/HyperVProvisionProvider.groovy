@@ -1,12 +1,18 @@
 package com.morpheusdata.hyperv
 
+import com.morpheusdata.PrepareHostResponse
 import com.morpheusdata.core.AbstractProvisionProvider
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
+import com.morpheusdata.core.data.DataQuery
+import com.morpheusdata.core.providers.HostProvisionProvider
 import com.morpheusdata.core.providers.ProvisionProvider
 import com.morpheusdata.core.providers.WorkloadProvisionProvider
+import com.morpheusdata.core.util.ComputeUtility
+import com.morpheusdata.core.util.NetworkUtility
 import com.morpheusdata.hyperv.utils.HypervOptsUtility
 import com.morpheusdata.model.*
+import com.morpheusdata.model.provisioning.HostRequest
 import com.morpheusdata.model.provisioning.WorkloadRequest
 import com.morpheusdata.response.InitializeHypervisorResponse
 import com.morpheusdata.response.PrepareWorkloadResponse
@@ -15,9 +21,9 @@ import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
 
 @Slf4j
-class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, ProvisionProvider.HypervisorProvisionFacet, ProvisionProvider.BlockDeviceNameFacet {
+class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, HostProvisionProvider, ProvisionProvider.HypervisorProvisionFacet, ProvisionProvider.BlockDeviceNameFacet {
 	public static final String PROVIDER_CODE = 'hyperv.provision'
-	public static final String PROVISION_PROVIDER_CODE = 'hyperv'
+	public static final String PROVISION_TYPE_CODE = 'hyperv'
 	public static final diskNames = ['sda', 'sdb', 'sdc', 'sdd', 'sde', 'sdf', 'sdg', 'sdh', 'sdi', 'sdj', 'sdk', 'sdl']
 
 	protected MorpheusContext context
@@ -101,7 +107,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	String getProvisionTypeCode() {
-		return PROVISION_PROVIDER_CODE
+		return PROVISION_TYPE_CODE
 	}
 
 	/**
@@ -123,7 +129,28 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	Collection<OptionType> getOptionTypes() {
 		Collection<OptionType> options = []
-		// TODO: create some option types for provisioning and add them to collection
+		options << new OptionType(
+				name: 'skip agent install',
+				code: 'provisionType.hyperv.noAgent',
+				category: 'provisionType.hyperv',
+				inputType: OptionType.InputType.CHECKBOX,
+				fieldName: 'noAgent',
+				fieldContext: 'config',
+				fieldCode: 'gomorpheus.optiontype.SkipAgentInstall',
+				fieldLabel: 'Skip Agent Install',
+				fieldGroup:'Advanced Options',
+				displayOrder: 4,
+				required: false,
+				enabled: true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'Skipping Agent installation will result in a lack of logging and guest operating system statistics. Automation scripts may also be adversely affected.',
+				defaultValue:null,
+				custom:false,
+				fieldClass:null
+		)
+
 		return options
 	}
 
@@ -135,6 +162,199 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	Collection<OptionType> getNodeOptionTypes() {
 		Collection<OptionType> nodeOptions = []
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.template',
+				inputType: OptionType.InputType.SELECT,
+				name:'template',
+				category:'provisionType.hyperv',
+				fieldName:'template',
+				fieldCode: 'gomorpheus.optiontype.Template',
+				fieldLabel:'Template',
+				fieldContext:'config',
+				fieldGroup:'Options',
+				required:false,
+				enabled:true,
+				optionSource:'hypervImage',
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:null,
+				custom:false,
+				displayOrder:8,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.port',
+				inputType: OptionType.InputType.TEXT,
+				name:'port',
+				category:'provisionType.hyperv',
+				fieldName:'port',
+				fieldCode: 'gomorpheus.optiontype.Ports',
+				fieldLabel:'Ports',
+				fieldContext:'config',
+				fieldGroup:'Options',
+				required:false,
+				enabled:true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:null,
+				custom:false,
+				displayOrder:9,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.host',
+				inputType: OptionType.InputType.SELECT,
+				name:'host',
+				category:'provisionType.hyperv',
+				fieldName:'hypervHostId',
+				fieldCode: 'gomorpheus.optiontype.Host',
+				fieldLabel:'Host',
+				fieldContext:'config',
+				fieldGroup:'Options',
+				required:true,
+				enabled:true,
+				optionSource:'hypervHost',
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:null,
+				custom:false,
+				displayOrder:10,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.custom.containerType.virtualImageId',
+				inputType: OptionType.InputType.SELECT,
+				name:'virtual image',
+				category:'provisionType.hyperv.custom',
+				optionSource:'hypervVirtualImages',
+				fieldName:'virtualImageId',
+				fieldCode: 'gomorpheus.optiontype.VirtualImage',
+				fieldLabel:'Virtual Image',
+				fieldContext:'containerType',
+				fieldGroup:'Hyper-V VM Options',
+				required:true,
+				enabled:true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:null,
+				custom:false,
+				displayOrder:1,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.custom.containerType.config.logVolume',
+				inputType: OptionType.InputType.TEXT,
+				name:'log volume',
+				category:'provisionType.hyperv.custom',
+				fieldName:'logVolume',
+				fieldCode: 'gomorpheus.optiontype.LogVolume',
+				fieldLabel:'Log Volume',
+				fieldContext:'containerType.config',
+				fieldGroup:'Hyper-V VM Options',
+				required:false,
+				enabled:true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:null,
+				custom:false,
+				displayOrder:2,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.custom.instanceType.backupType',
+				inputType: OptionType.InputType.HIDDEN,
+				name:'backup type',
+				category:'provisionType.hyperv.custom',
+				fieldName:'backupType',
+				fieldCode: 'gomorpheus.optiontype.BackupType',
+				fieldLabel:'Backup Type',
+				fieldContext:'instanceType',
+				fieldGroup:'Hyper-V VM Options',
+				required:false,
+				enabled:true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:'hypervSnapshot',
+				custom:false,
+				displayOrder:4,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.custom.containerType.statTypeCode',
+				inputType: OptionType.InputType.HIDDEN,
+				name:'stat type code',
+				category:'provisionType.hyperv.custom',
+				fieldName:'statTypeCode',
+				fieldCode: 'gomorpheus.optiontype.StatTypeCode',
+				fieldLabel:'Stat Type Code',
+				fieldContext:'containerType',
+				fieldGroup:'Hyper-V VM Options',
+				required:false,
+				enabled:true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:'hyperv',
+				custom:false,
+				displayOrder:6,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.custom.containerType.logTypeCode',
+				inputType: OptionType.InputType.HIDDEN,
+				name:'log type code',
+				category:'provisionType.hyperv.custom',
+				fieldName:'logTypeCode',
+				fieldCode: 'gomorpheus.optiontype.LogTypeCode',
+				fieldLabel:'Log Type Code',
+				fieldContext:'containerType',
+				fieldGroup:'Hyper-V VM Options',
+				required:false,
+				enabled:true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:'hyperv',
+				custom:false,
+				displayOrder:7,
+				fieldClass:null
+		)
+		nodeOptions << new OptionType(
+				code:'provisionType.hyperv.custom.instanceTypeLayout.description',
+				inputType: OptionType.InputType.HIDDEN,
+				name:'layout description',
+				category:'provisionType.hyperv.custom',
+				fieldName:'description',
+				fieldCode: 'gomorpheus.optiontype.LayoutDescription',
+				fieldLabel:'Layout Description',
+				fieldContext:'instanceTypeLayout',
+				fieldGroup:'Hyper-V VM Options',
+				required:false,
+				enabled:true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:'This will provision a single vm container',
+				custom:false,
+				displayOrder:9,
+				fieldClass:null
+		)
+
 		return nodeOptions
 	}
 
@@ -144,9 +364,8 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	Collection<StorageVolumeType> getRootVolumeStorageTypes() {
-		Collection<StorageVolumeType> volumeTypes = []
-		// TODO: create some storage volume types and add to collection
-		return volumeTypes
+		context.async.storageVolume.storageVolumeType.list(
+				new DataQuery().withFilter("code", "standard")).toList().blockingGet()
 	}
 
 	/**
@@ -155,9 +374,8 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	Collection<StorageVolumeType> getDataVolumeStorageTypes() {
-		Collection<StorageVolumeType> dataVolTypes = []
-		// TODO: create some data volume types and add to collection
-		return dataVolTypes
+		context.async.storageVolume.storageVolumeType.list(
+				new DataQuery().withFilter("code", "standard")).toList().blockingGet()
 	}
 
 	/**
@@ -168,9 +386,45 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	Collection<ServicePlan> getServicePlans() {
-		Collection<ServicePlan> plans = []
-		// TODO: create some service plans (sizing like cpus, memory, etc) and add to collection
-		return plans
+		def servicePlans = []
+
+		servicePlans << new ServicePlan([code:'hyperv-512', editable:true, name:'Hyper-V Nano (1 vCPU, 512MB Memory)', description:'Hyper-V Nano (1 vCPU, 512MB Memory)', sortOrder:0,
+										 maxCores:1, maxStorage:10l * 1024l * 1024l * 1024l, maxMemory: 1l * 512l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-1024', editable:true, name:'1 Core, 1GB Memory', description:'1 Core, 1GB Memory', sortOrder:1,
+										 maxCores:1, maxStorage: 10l * 1024l * 1024l * 1024l, maxMemory: 1l * 1024l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-2048', editable:true, name:'1 Core, 2GB Memory', description:'1 Core, 2GB Memory', sortOrder:2,
+										 maxCores:1, maxStorage: 20l * 1024l * 1024l * 1024l, maxMemory: 2l * 1024l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-4096', editable:true, name:'1 Core, 4GB Memory', description:'1 Core, 4GB Memory', sortOrder:3,
+										 maxCores:1, maxStorage: 40l * 1024l * 1024l * 1024l, maxMemory: 4l * 1024l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-8192', editable:true, name:'2 Core, 8GB Memory', description:'2 Core, 8GB Memory', sortOrder:4,
+										 maxCores:2, maxStorage: 80l * 1024l * 1024l * 1024l, maxMemory: 8l * 1024l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-16384', editable:true, name:'2 Core, 16GB Memory', description:'2 Core, 16GB Memory', sortOrder:5,
+										 maxCores:2, maxStorage: 160l * 1024l * 1024l * 1024l, maxMemory: 16l * 1024l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-24576', editable:true, name:'4 Core, 24GB Memory', description:'4 Core, 24GB Memory', sortOrder:6,
+										 maxCores:4, maxStorage: 240l * 1024l * 1024l * 1024l, maxMemory: 24l * 1024l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-32768', editable:true, name:'4 Core, 32GB Memory', description:'4 Core, 32GB Memory', sortOrder:7,
+										 maxCores:4, maxStorage: 320l * 1024l * 1024l * 1024l, maxMemory: 32l * 1024l * 1024l * 1024l, maxCpu:1,
+										 customMaxStorage:true, customMaxDataStorage:true, addVolumes:true])
+
+		servicePlans << new ServicePlan([code:'hyperv-hypervisor', editable:false, name:'Hyperv hypervisor', description:'custom hypervisor plan', sortOrder:100, hidden:true,
+										 maxCores:1, maxCpu:1, maxStorage:20l * 1024l * 1024l * 1024l, maxMemory:(long)(1l * 1024l * 1024l * 1024l), active:true,
+										 customCores:true, customMaxStorage:true, customMaxDataStorage:true, customMaxMemory:true])
+
+		servicePlans
 	}
 
 	/**
@@ -411,4 +665,472 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	String[] getDiskNameList() {
 		return diskNames
 	}
+
+	@Override
+	ServiceResponse validateHost(ComputeServer server, Map opts=[:]) {
+		log.debug("validateServiceConfiguration:$opts")
+		log.info("RAZI :: validateHost >> opts: ${opts}")
+		def rtn = [success:false, errors:[]]
+		try {
+			def cloudId = server?.cloud?.id ?: opts.siteZoneId
+//			def zone = cloudId ? ComputeZone.read(zoneId?.toLong()) : null
+			def cloud = cloudId ? context.services.cloud.get(cloudId?.toLong()) : null
+			log.info("RAZI :: server.computeServerType?.vmHypervisor: ${server.computeServerType?.vmHypervisor}")
+			if(server.computeServerType?.vmHypervisor == true) {
+				rtn = [success:true, errors:[]]
+			} else {
+				def validationOpts = [
+						networkInterfaces: opts?.networkInterfaces
+				]
+				log.info("RAZI :: opts?.config?.containsKey('hypervHostId'): ${opts?.config?.containsKey('hypervHostId')}")
+				if(opts?.config?.containsKey('hypervHostId')){
+					log.info("RAZI :: opts.config.hypervHostId: ${opts.config.hypervHostId}")
+					validationOpts.hostId = opts.config.hypervHostId
+				}
+				log.info("RAZI :: opts?.config?.containsKey('nodeCount'): ${opts?.config?.containsKey('nodeCount')}")
+				if(opts?.config?.containsKey('nodeCount')){
+					log.info("RAZI :: opts.config.nodeCount: ${opts.config.nodeCount}")
+					validationOpts.nodeCount = opts.config.nodeCount
+				}
+				rtn = apiService.validateServerConfig(validationOpts)
+				log.info("RAZI :: validateHost >> rtn: ${rtn}")
+			}
+		} catch(e) {
+			log.error("error in validateServerConfig:${e.message}", e)
+		}
+		return ServiceResponse.create(rtn)
+	}
+
+	protected ComputeServer saveAndGet(ComputeServer server) {
+		def saveResult = context.async.computeServer.bulkSave([server]).blockingGet()
+		def updatedServer
+		if(saveResult.success == true) {
+			updatedServer = saveResult.persistedItems.find { it.id == server.id }
+		} else {
+			updatedServer = saveResult.failedItems.find { it.id == server.id }
+			log.warn("Error saving server: ${server?.id}" )
+		}
+		return updatedServer ?: server
+	}
+
+	@Override
+	ServiceResponse<PrepareHostResponse> prepareHost(ComputeServer server, HostRequest hostRequest, Map opts) {
+		log.debug "prepareHost: ${server} ${hostRequest} ${opts}"
+
+		def prepareResponse = new PrepareHostResponse(computeServer: server, disableCloudInit: false, options: [sendIp: true])
+		ServiceResponse<PrepareHostResponse> rtn = ServiceResponse.prepare(prepareResponse)
+
+		try {
+			VirtualImage virtualImage
+			log.info("RAZI :: server.typeSet?.id: ${server.typeSet?.id}")
+			Long computeTypeSetId = server.typeSet?.id
+			if(computeTypeSetId) {
+				ComputeTypeSet computeTypeSet = morpheus.async.computeTypeSet.get(computeTypeSetId).blockingGet()
+				log.info("RAZI :: computeTypeSet.workloadType: ${computeTypeSet.workloadType}")
+				if(computeTypeSet.workloadType) {
+					WorkloadType workloadType = morpheus.async.workloadType.get(computeTypeSet.workloadType.id).blockingGet()
+					virtualImage = workloadType.virtualImage
+					log.info("RAZI :: if(computeTypeSet.workloadType) >> virtualImage: ${virtualImage}")
+				}
+			}
+			log.info("RAZI :: before if(!virtualImage) >> virtualImage: ${virtualImage}")
+			if(!virtualImage) {
+				rtn.msg = "No virtual image selected"
+			} else {
+				server.sourceImage = virtualImage
+				saveAndGet(server)
+				rtn.success = true
+			}
+		} catch(e) {
+			rtn.msg = "Error in prepareHost: ${e}"
+			log.error("${rtn.msg}, ${e}", e)
+
+		}
+		log.info("RAZI :: prepareHost last >> rtn: ${rtn}")
+		return rtn
+	}
+
+	def pickHypervHypervisor(cloud) {
+		def hypervServer = context.services.computeServer.find(new DataQuery()
+				.withFilter('zone.id', cloud.id)
+				.withFilter('computerServerType.code', 'hypervHypervisor'))
+		return hypervServer
+	}
+
+	@Override
+	ServiceResponse<ProvisionResponse> runHost(ComputeServer server, HostRequest hostRequest, Map opts) {
+		log.debug("runHost: ${server} ${hostRequest} ${opts}")
+		log.info("RAZI :: runHost: ${server} ${hostRequest} ${opts}")
+
+		ProvisionResponse provisionResponse = new ProvisionResponse()
+		try {
+			def config = server.getConfigMap()
+			log.info("RAZI :: config: ${config}")
+			Cloud cloud = server.cloud
+//			Account account = server.account
+//			def cloudConfig = cloud.getConfigMap()
+			def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, cloud)
+			log.info("RAZI :: hypervOpts1: ${hypervOpts}")
+			def imageType = config.templateTypeSelect ?: 'default'
+			log.info("RAZI :: imageType: ${imageType}")
+			def imageId
+			def virtualImage
+//			def applianceServerUrl = applianceService.getApplianceUrl(server.zone)
+			log.info("RAZI :: config.hostId: ${config.hostId}")
+			log.info("RAZI :: context.services.computeServer: ${context.services.computeServer.get(config.hostId.toLong())}")
+			log.info("RAZI :: pickHypervHypervisor: ${pickHypervHypervisor(cloud)}")
+			def node = config.hostId ? context.services.computeServer.get(config.hostId.toLong()) : pickHypervHypervisor(cloud)
+			log.info("RAZI :: node: ${node}")
+			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
+			log.info("RAZI :: hypervOpts2: ${hypervOpts}")
+			def layout = server.layout
+			log.info("RAZI :: layout: ${layout}")
+			def typeSet = server.typeSet
+			log.info("RAZI :: typeSet: ${typeSet}")
+			if(layout && typeSet) {
+				virtualImage = typeSet.containerType.virtualImage
+				log.info("RAZI :: if(layout && typeSet) >> virtualImage: ${virtualImage}")
+				imageId = virtualImage.externalId
+				log.info("RAZI :: if(layout && typeSet) >> imageId: ${imageId}")
+			} else if(imageType == 'custom' && config.template) {
+				def virtualImageId = config.template?.toLong()
+				log.info("RAZI :: else if(imageType == 'custom' && config.template) >> virtualImageId: ${virtualImageId}")
+				virtualImage = morpheus.services.virtualImage.get(virtualImageId)
+				log.info("RAZI :: else if(imageType == 'custom' && config.template) >> virtualImage: ${virtualImage}")
+				imageId = virtualImage.externalId
+				log.info("RAZI :: else if(imageType == 'custom' && config.template) >> imageId: ${imageId}")
+			} else {
+				virtualImage = new VirtualImage(code: 'hyperv.image.morpheus.ubuntu.16.04.3-v1.ubuntu.16.04.3.amd64')
+				log.info("RAZI :: } else { >> virtualImage: ${virtualImage}")
+			}
+			log.info("RAZI :: before if(!imageId) >> imageId: ${imageId}")
+			if(!imageId) { //If its userUploaded and still needs uploaded
+				def cloudFiles = context.async.virtualImage.getVirtualImageFiles(virtualImage).blockingGet()
+				log.info("RAZI :: cloudFiles: ${cloudFiles}")
+				Long computeTypeSetId = typeSet?.id
+				WorkloadType containerType
+				if (computeTypeSetId){
+					ComputeTypeSet computeTypeSet = morpheus.services.computeTypeSet.get(computeTypeSetId)
+					WorkloadType workloadType = computeTypeSet.getWorkloadType()
+					Long workloadTypeId = workloadType.id
+					containerType = morpheus.services.containerType.get(workloadTypeId)
+				}
+
+				def containerImage = [
+						name			: virtualImage.name ?: containerType.imageCode,
+						minDisk			: 5,
+						minRam			: 512l * ComputeUtility.ONE_MEGABYTE,
+						virtualImageId	: virtualImage.id,
+						tags			: 'morpheus, ubuntu',
+						imageType		: 'vhd',
+						containerType	: 'vhd',
+						cloudFiles		: cloudFiles,
+//						cachePath		: virtualImageService.getLocalCachePath()
+				]
+				log.info("RAZI :: containerImage: ${containerImage}")
+				hypervOpts.image = containerImage
+//				hypervOpts.applianceServerUrl = applianceServerUrl
+				hypervOpts.userId = server.createdBy?.id
+				log.debug "hypervOpts:${hypervOpts}"
+				def imageResults = apiService.insertContainerImage(hypervOpts)
+				log.info("RAZI :: imageResults: ${imageResults}")
+				if(imageResults.success == true) {
+					imageId = imageResults.imageId
+					log.info("RAZI :: if(imageResults.success == true) >> imageId: ${imageId}")
+				}
+			}
+			log.info("RAZI :: before if(imageId) >> imageId: ${imageId}")
+			if(imageId) {
+				server.sourceImage = virtualImage
+				server.serverOs = server.serverOs ?: virtualImage.osType
+				server.osType = (virtualImage.osType?.platform == 'windows' ? 'windows' :'linux') ?: virtualImage.platform
+				log.info("RAZI :: server.osType: ${server.osType}")
+				hypervOpts.secureBoot = virtualImage?.uefi ?: false
+				hypervOpts.imageId = imageId
+//				hypervOpts.diskMap = virtualImageService.getImageDiskMap(virtualImage) // Dustin will implement it
+				hypervOpts += HypervOptsUtility.getHypervServerOpts(context, server)
+				hypervOpts.networkConfig = hostRequest.networkConfiguration
+				hypervOpts.cloudConfigUser = hostRequest.cloudConfigUser
+				hypervOpts.cloudConfigMeta = hostRequest.cloudConfigMeta
+				hypervOpts.cloudConfigNetwork = hostRequest.cloudConfigNetwork
+				hypervOpts.isSysprep = virtualImage?.isSysprep
+
+//				def isoBuffer = IsoUtility.buildCloudIso(server.osType, hypervOpts.cloudConfigMeta, hypervOpts.cloudConfigUser)
+				log.info("RAZI :: hypervOpts.isSysprep: ${hypervOpts.isSysprep}")
+				log.info("RAZI :: hypervOpts.cloudConfigMeta: ${hypervOpts.cloudConfigMeta}")
+				log.info("RAZI :: hypervOpts.cloudConfigUser: ${hypervOpts.cloudConfigUser}")
+				log.info("RAZI :: hypervOpts.cloudConfigNetwork: ${hypervOpts.cloudConfigNetwork}")
+				def isoBuffer = context.services.provision.buildIsoOutputStream(
+						hypervOpts.isSysprep, server.osType, hypervOpts.cloudConfigMeta, hypervOpts.cloudConfigUser, hypervOpts.cloudConfigNetwork)
+
+				log.info("RAZI :: isoBuffer: ${isoBuffer}")
+				log.info("RAZI :: isoBuffer.toByteArray(): ${isoBuffer.toByteArray()}")
+				hypervOpts.cloudConfigBytes = isoBuffer.toByteArray()
+				server.cloudConfigUser = hypervOpts.cloudConfigUser
+				server.cloudConfigMeta = hypervOpts.cloudConfigMeta
+
+				//save the server
+				context.async.computeServer.save(server).blockingGet()
+
+				//create it in hyperv
+				log.debug("create server:${hypervOpts}")
+				def createResults = apiService.cloneServer(hypervOpts)
+				log.info("RAZI :: createResults: ${createResults}")
+				log.debug("create server results:${createResults}")
+				if(createResults.success == true) {
+					def instance = createResults.server //lookup ip
+					log.info("RAZI :: instance: ${instance}")
+					if(instance) {
+						log.info("RAZI :: instance.id: ${instance.id}")
+						server.externalId = instance.id
+						server.parentServer = node
+//						opts.server.save(flush:true)
+						context.async.computeServer.save(server).blockingGet()
+						def serverDetails = apiService.getServerDetails(hypervOpts, server.externalId)
+						log.info("RAZI :: serverDetails: ${serverDetails}")
+						if(serverDetails.success == true) {
+							//fill in ip address.
+//							def privateIp = serverDetails.server.ipAddress
+//							def publicIp = serverDetails.server.ipAddress
+//							hypervProvisionService.applyComputeServerNetworkIp(opts.server, privateIp, publicIp, null, null, 0, null) //ignore it
+							server.osDevice = '/dev/sda'
+							server.dataDevice = '/dev/sdb'
+							server.managed = true
+//							opts.server.save()
+							context.async.computeServer.save(server).blockingGet()
+							server.capacityInfo = new ComputeCapacityInfo(maxCores:hypervOpts.maxCores, maxMemory:hypervOpts.memory, maxStorage:hypervOpts.maxTotalStorage)
+//							opts.server.capacityInfo.save()
+//							opts.server.save(flush:true)
+							log.info("RAZI :: server.capacityInfo: ${server.capacityInfo}")
+							context.async.computeServer.save(server).blockingGet()
+							provisionResponse.success = true
+							log.info("RAZI :: provisionResponse: ${provisionResponse}")
+						} else {
+							//no server detail
+							server.statusMessage = 'Error loading server details'
+						}
+					} else {
+						//no reservation
+						server.statusMessage = 'Error loading created server'
+					}
+				} else {
+					if(createResults.server?.id) {
+						// we did create a vm though so we need to bind it to the server
+						server.externalId = createResults.server.id
+//						opts.server.save(flush:true)
+						context.async.computeServer.save(server).blockingGet()
+					}
+					server.statusMessage = 'Error creating server'
+					//tell someone :)
+				}
+			} else {
+				server.statusMessage = 'Error creating server'
+			}
+			if(provisionResponse.success != true) {
+				return new ServiceResponse(success: false, msg: provisionResponse.message ?: 'vm config error', error: provisionResponse.message, data: provisionResponse)
+			} else {
+				return new ServiceResponse<ProvisionResponse>(success: true, data: provisionResponse)
+			}
+
+		} catch(Exception e) {
+			log.error("Error in runHost method: ${e.message}", e)
+			provisionResponse.setError(e.message)
+			return new ServiceResponse(success: false, msg: e.message, error: e.message, data: provisionResponse)
+		}
+	}
+
+	@Override
+	ServiceResponse<ProvisionResponse> waitForHost(ComputeServer server){
+		log.debug("waitForHost: ${server}")
+		def provisionResponse = new ProvisionResponse()
+		ServiceResponse<ProvisionResponse> rtn = ServiceResponse.prepare(provisionResponse)
+		try {
+			def hypervOpts = HypervOptsUtility.getHypervZoneOpts(morpheusContext, cloud)
+			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(server)
+			log.info("RAZI :: waitForHost >> server.externalId: ${server.externalId}")
+			def serverDetail = apiService.checkServerReady(hypervOpts, server.externalId)
+			log.info("RAZI :: waitForHost >> serverDetail: ${serverDetail}")
+			if (serverDetail.success == true) {
+				provisionResponse.privateIp = serverDetail.ipAddress
+				provisionResponse.publicIp = serverDetail.ipAddress
+				provisionResponse.externalId = server.externalId
+				def finalizeResults = finalizeHost(server)
+				log.info("RAZI :: finalizeResults: ${finalizeResults}")
+				if(finalizeResults.success == true) {
+					provisionResponse.success = true
+					rtn.success = true
+				}
+			}
+		} catch (e){
+			log.error("Error waitForHost: ${e.message}", e)
+			rtn.success = false
+			rtn.msg = "Error in waiting for Host: ${e}"
+		}
+		log.info("RAZI :: waitForHost last >> rtn: ${rtn}")
+		return rtn
+	}
+
+	def isValidIpv6Address(String address) {
+		// validate the ipv6 address is an ipv6 address. There is no separate validation for ipv6 addresses, so validate that its not an ipv4 address and it is a valid ip address
+		return address && NetworkUtility.validateIpAddr(address, false) == false && NetworkUtility.validateIpAddr(address, true) == true
+	}
+
+	def setNetworkInfo(List<ComputeServerInterface> serverInterfaces, externalNetworks) {
+		log.info("serverInterfaces: ${serverInterfaces}, externalNetworks: ${externalNetworks}")
+		try {
+			if(externalNetworks?.size() > 0) {
+				serverInterfaces?.eachWithIndex { networkInterface, index ->
+					if(networkInterface.externalId) {
+						//check for changes?
+					} else {
+						def matchNetwork = externalNetworks.find{networkInterface.internalId == it.uuid}
+						if(!matchNetwork) {
+							def displayOrder = "${networkInterface.displayOrder}"
+							matchNetwork = externalNetworks.find{displayOrder == it.deviceIndex}
+						}
+						if(matchNetwork) {
+							networkInterface.externalId = "${matchNetwork.deviceIndex}"
+							networkInterface.internalId = "${matchNetwork.uuid}"
+							networkInterface.macAddress = matchNetwork.macAddress
+							if(networkInterface.type == null) {
+								networkInterface.type = new ComputeServerInterfaceType(code: 'xenNetwork')
+							}
+							context.async.computeServer.computeServerInterface.save([networkInterface]).blockingGet()
+						}
+					}
+				}
+			}
+		} catch(e) {
+			log.error("setNetworkInfo error: ${e}", e)
+		}
+	}
+
+	@Override
+	ServiceResponse finalizeHost(ComputeServer server) {
+		ServiceResponse rtn = ServiceResponse.prepare()
+		log.debug("finalizeHost: ${server?.id}")
+		try {
+			def hypervOpts = HypervOptsUtility.getHypervZoneOpts(morpheusContext, cloud)
+			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(server)
+			def serverDetail = apiService.checkServerReady(hypervOpts, server.externalId)
+			log.info("RAZI :: finalizeHost >> serverDetail: ${serverDetail}")
+
+			if (serverDetail.success == true){
+				serverDetail.ipAddresses.each { interfaceName, data ->
+					ComputeServerInterface netInterface = server.interfaces?.find{it.name == interfaceName}
+					log.info("RAZI :: netInterface: ${netInterface}")
+					if(netInterface) {
+						log.info("RAZI :: data.ipAddress: ${data.ipAddress}")
+						if(data.ipAddress) {
+							def address = new NetAddress(address: data.ipAddress, type: NetAddress.AddressType.IPV4)
+							log.info("RAZI :: address.address: ${address.address}")
+							log.info("RAZI :: !NetworkUtility.validateIpAddr(address.address): ${!NetworkUtility.validateIpAddr(address.address)}")
+							if(!NetworkUtility.validateIpAddr(address.address)){
+								log.debug("NetAddress Errors: ${address}")
+							}
+							netInterface.addresses << address
+							netInterface.publicIpAddress = data.ipAddress
+							log.info("RAZI :: netInterface.publicIpAddress: ${netInterface.publicIpAddress}")
+						}
+						log.info("RAZI :: data.ipv6Address: ${data.ipv6Address}")
+						log.info("RAZI :: isValidIpv6Address(data.ipv6Address): ${isValidIpv6Address(data.ipv6Address)}")
+						if(data.ipv6Address && isValidIpv6Address(data.ipv6Address)) {
+							def address = new NetAddress(address: data.ipv6Address, type: NetAddress.AddressType.IPV6)
+							netInterface.addresses << address
+							netInterface.publicIpv6Address = data.ipv6Address
+							log.info("RAZI :: netInterface.publicIpv6Address: ${netInterface.publicIpv6Address}")
+						}
+						context.async.computeServer.computeServerInterface.save([netInterface]).blockingGet()
+						log.info("RAZI :: computeServerInterface save SUCCESS")
+					}
+				}
+				log.info("RAZI :: serverDetail.networks: ${serverDetail.networks}")
+				setNetworkInfo(server.interfaces, serverDetail.networks)
+				context.async.computeServer.save(server).blockingGet()
+				rtn.success = true
+			}
+		} catch (e){
+			rtn.success = false
+			rtn.msg = "Error in finalizing server: ${e.message}"
+			log.error("Error in finalizeHost: ${e.message}", e)
+		}
+		log.info("RAZI :: finalizeHost last >> rtn: ${rtn}")
+		return rtn
+	}
+
+	@Override
+	Boolean hasNetworks() {
+		return true
+	}
+
+	@Override
+	Boolean canAddVolumes() {
+		return true
+	}
+
+	@Override
+	Boolean canCustomizeRootVolume() {
+		return true
+	}
+
+	@Override
+	HostType getHostType() {
+		return HostType.vm
+	}
+
+	@Override
+	String serverType() {
+		return "vm"
+	}
+
+	@Override
+	Boolean supportsCustomServicePlans() {
+		return true;
+	}
+
+	@Override
+	Boolean multiTenant() {
+		return false
+	}
+
+	@Override
+	Boolean aclEnabled() {
+		return false
+	}
+
+	@Override
+	Boolean customSupported() {
+		return true;
+	}
+
+	@Override
+	Boolean lvmSupported() {
+		return true
+	}
+
+	@Override
+	String getDeployTargetService() {
+		return "vmDeployTargetService"
+	}
+
+	@Override
+	String getNodeFormat() {
+		return "vm"
+	}
+
+	@Override
+	Boolean hasSecurityGroups() {
+		return false
+	}
+
+	@Override
+	Boolean hasNodeTypes() {
+		return true;
+	}
+
+	@Override
+	String getHostDiskMode() {
+		return 'lvm'
+	}
+
 }

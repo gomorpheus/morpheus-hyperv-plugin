@@ -264,7 +264,8 @@ class HyperVApiService {
                 def imageFolderName = opts.serverFolder
                 def networkName = opts.network?.name
                 def diskFolder = "${diskRoot}\\${imageFolderName}"
-                def bootDiskName = opts.diskMap?.bootDisk?.fileName ?: 'ubuntu-14_04.vhd'
+//                def bootDiskName = opts.diskMap?.bootDisk?.fileName ?: 'ubuntu-14_04.vhd'
+                def bootDiskName = 'ubuntu-14_04.vhd'
                 disks.osDisk = [externalId: bootDiskName]
                 def osDiskPath = diskFolder + '\\' + bootDiskName
                 def vmFolder = "${vmRoot}\\${imageFolderName}"
@@ -379,7 +380,9 @@ class HyperVApiService {
                     log.info("Starting Server  ${opts.name}")
                     startServer(opts, opts.name)
                     //get details
-                    log.info("Hyperv Check for Server Ready ${opts.name}")
+//                    log.info("Hyperv Check for Server Ready ${opts.name}")
+                    log.info("RAZI :: opts for checkServerReady: ${opts}")
+                    log.info("RAZI :: opts.name for checkServerReady: ${opts.name}")
                     def serverDetail = checkServerReady(opts, opts.name)
                     if (serverDetail.success == true) {
                         // write ip address to notes here
