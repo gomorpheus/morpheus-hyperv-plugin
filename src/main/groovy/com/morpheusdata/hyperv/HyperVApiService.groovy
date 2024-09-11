@@ -1,6 +1,7 @@
 package com.morpheusdata.hyperv
 
 import com.morpheusdata.core.MorpheusContext
+import com.morpheusdata.model.ComputeServer
 import groovy.json.JsonOutput
 import groovy.util.logging.Slf4j
 
@@ -20,6 +21,12 @@ class HyperVApiService {
     static defaultRoot = 'C:\\morpheus'
 
     def executeCommand(command, opts) {
+        log.info ("Ray :: executeCommand: command: ${command}")
+        log.info ("Ray :: executeCommand: opts: ${opts}")
+        log.info ("Ray :: executeCommand: opts.sshHost: ${opts.sshHost}")
+        log.info ("Ray :: executeCommand: opts.sshPort: ${opts.sshPort}")
+        log.info ("Ray :: executeCommand: opts.sshUsername: ${opts.sshUsername}")
+        log.info ("Ray :: executeCommand: opts.sshPassword: ${opts.sshPassword}")
         def output = morpheusContext.executeWindowsCommand(opts.sshHost, opts.sshPort?.toInteger(), opts.sshUsername, opts.sshPassword, command, null, false).blockingGet()
         return output
     }
@@ -99,7 +106,7 @@ class HyperVApiService {
         log.info ("Ray :: transferImage: dirResults: ${dirResults}")
         log.info ("Ray :: transferImage: metadataFile: ${metadataFile}")
         if (metadataFile) {
-            def tgtUrl = morpheusContext.services.virtualImage.getCloudFileStreamUrl(opts.image, metadataFile, opts.user, opts.zone)
+            def tgtUrl = morpheusContext.services.virtualImage.getCloudFileStreamUrl(opts.virtualImage, metadataFile, opts.user, opts.zone)
             log.info ("Ray :: transferImage: tgtUrl: ${tgtUrl}")
             tgtUrl = tgtUrl.replace("https", "http")
             log.info ("Ray :: transferImage: tgtUrl1: ${tgtUrl}")
@@ -109,16 +116,30 @@ class HyperVApiService {
             log.info ("Ray :: transferImage: fileList: ${fileList}")
         }
         vhdFiles.each { vhdFile ->
+            log.info ("Ray :: transferImage: vhdFile.name: ${vhdFile.name}")
             def tgtFilename = extractImageFileName(vhdFile.name)
-            def tgtUrl = morpheusContext.services.virtualImage.getCloudFileStreamUrl(opts.image, vhdFile, opts.user, opts.zone)
+            log.info ("Ray :: transferImage: tgtFilename: ${tgtFilename}")
+            log.info ("Ray :: transferImage: opts.virtualImage: ${opts.virtualImage}")
+            log.info ("Ray :: transferImage: vhdFile: ${vhdFile}")
+            log.info ("Ray :: transferImage: opts.user: ${opts.user}")
+            log.info ("Ray :: transferImage: opts.zone: ${opts.zone}")
+            def tgtUrl = morpheusContext.services.virtualImage.getCloudFileStreamUrl(opts.virtualImage, vhdFile, opts.user, opts.zone)
+            log.info ("Ray :: transferImage: tgtUrl: ${tgtUrl}")
             log.info("vhd url: ${tgtUrl}")
             fileList << [inline    : true, action: 'download', content: tgtUrl.bytes.encodeAsBase64(),
-                         targetPath: "${tgtFolder}\\${tgtFilename}".toString()]
+                         targetPath: "${tgtFolder}\\${tgtFilename}".toString(), tgtFilename: tgtFilename]
         }
+        log.info ("Ray :: transferImage: opts.hypervisor: ${opts.hypervisor}")
         fileList.each { fileAction ->
-            def filePromise = opts.commandService.sendAction(opts.hypervisor, fileAction, [timeout: 1800000l])
-            def fileResults = filePromise.get(1000l * 60l * 15l)
-            rtn.success = fileResults?.success == true
+            log.info ("Ray :: transferImage: fileAction: ${fileAction}")
+            // TODO: need to check:
+            //def filePromise = opts.commandService.sendAction(opts.hypervisor, fileAction, [timeout: 1800000l])
+            morpheusContext.services.fileCopy.copyToServer(server, fileAction.tgtFilename,)
+            copyToServer(ComputeServer server, String fileName, String filePath, InputStream sourceStream, Long contentLength);
+            //need sever from opts, fileAction.tgtFilename, fileAction.tgtUrl, getSourceStream from vhdCloudFile same as xen,
+            //def fileResults = filePromise.get(1000l * 60l * 15l)
+           // rtn.success = fileResults?.success == true
+            rtn.success = true
         }
 
         log.info ("Ray :: transferImage: rtn: ${rtn}")
@@ -127,20 +148,34 @@ class HyperVApiService {
 
     def cloneImage(opts, srcImage, tgtName) {
         log.info("cloneImage: ${srcImage} -> ${tgtName}")
+        log.info ("Ray :: cloneImage: opts: ${opts}")
+        log.info ("Ray :: cloneImage: srcImage: ${srcImage}")
+        log.info ("Ray :: cloneImage: tgtName: ${tgtName}")
         def rtn = [success: false]
         try {
             def diskRoot = opts.diskRoot
+            log.info ("Ray :: cloneImage: diskRoot: ${diskRoot}")
             def imageFolderName = opts.serverFolder
+            log.info ("Ray :: cloneImage: imageFolderName: ${imageFolderName}")
             def tgtFolder = "${diskRoot}\\${imageFolderName}"
             def command = "mkdir \"${tgtFolder}\""
+            log.info ("Ray :: cloneImage: command: ${command}")
             def out = executeCommand(command, opts)
+            log.info ("Ray :: cloneImage: out?.success: ${out?.success}")
+            log.info ("Ray :: cloneImage: out?.data: ${out?.data}")
             command = "xcopy \"${srcImage}\" \"${tgtFolder}\" /y /i /r /h /s"
+            log.info ("Ray :: cloneImage: command2: ${command}")
             log.debug("cloneImage command: ${command}")
             out = executeCommand(command, opts)
+            log.info ("Ray :: cloneImage: out?.success2: ${out?.success}")
+            log.info ("Ray :: cloneImage: out?.data2: ${out?.data}")
             log.info("cloneImage: ${out}")
             if (out.success == true) {
                 command = "dir \"${tgtFolder}\""
+                log.info ("Ray :: cloneImage: command3: ${command}")
                 out = executeCommand(command, opts)
+                log.info ("Ray :: cloneImage: out?.success3: ${out?.success}")
+                log.info ("Ray :: cloneImage: out?.data3: ${out?.data}")
                 rtn.targetPath = tgtFolder
                 rtn.success = out.success
             }
@@ -288,28 +323,38 @@ class HyperVApiService {
     }
 
     def cloneServer(opts) {
+        log.info ("Ray :: cloneServer: opts: ${opts}")
         log.debug "cloneServer opts: ${opts}"
         def rtn = [success: false]
         try {
             def imageName = opts.imageId
+            log.info ("Ray :: cloneServer: imageName: ${imageName}")
             def cloneResults = cloneImage(opts, imageName, opts.serverFolder)
+            log.info ("Ray :: cloneServer: cloneResults: ${cloneResults}")
             log.info "cloneResults: ${cloneResults}"
             if (cloneResults.success == true) {
                 def disks = [osDisk: [:], dataDisks: []]
                 def diskRoot = opts.diskRoot
+                log.info ("Ray :: cloneServer: diskRoot: ${diskRoot}")
                 def vmRoot = opts.vmRoot
                 def imageFolderName = opts.serverFolder
+                log.info ("Ray :: cloneServer: imageFolderName: ${imageFolderName}")
                 def networkName = opts.network?.name
+                log.info ("Ray :: cloneServer: networkName: ${networkName}")
                 def diskFolder = "${diskRoot}\\${imageFolderName}"
-                def bootDiskName = opts.diskMap?.bootDisk?.fileName ?: 'ubuntu-14_04.vhd'
+                log.info ("Ray :: cloneServer: diskFolder: ${diskFolder}")
+                def bootDiskName = opts.diskMap?.bootDisk?.fileName ?: 'morpheus-ubuntu-22_04-amd64-20240604.vhd' //'ubuntu-14_04.vhd'
+                log.info ("Ray :: cloneServer: bootDiskName: ${bootDiskName}")
                 disks.osDisk = [externalId: bootDiskName]
                 def osDiskPath = diskFolder + '\\' + bootDiskName
                 def vmFolder = "${vmRoot}\\${imageFolderName}"
                 //network config
                 def additionalNetworks = []
+                log.info ("Ray :: cloneServer: opts.networkConfig?.primaryInterface?.network?.externalId: ${opts.networkConfig?.primaryInterface?.network?.externalId}")
                 if (opts.networkConfig?.primaryInterface?.network?.externalId) { //new style multi network
                     def primaryInterface = opts.networkConfig.primaryInterface
                     networkName = primaryInterface.network.externalId
+                    log.info ("Ray :: cloneServer: networkName: ${networkName}")
                     //additional nics
                     def extraIndex = 1
                     opts.networkConfig.extraInterfaces?.each { extraInterface ->
@@ -324,8 +369,15 @@ class HyperVApiService {
                 if (osDiskPath.endsWith('.vhdx')) {
                     generation = 2
                 }
+                log.info ("Ray :: cloneServer: opts.name: ${opts.name}")
+                log.info ("Ray :: cloneServer: opts.memory: ${opts.memory}")
+                log.info ("Ray :: cloneServer: generation: ${generation}")
+                log.info ("Ray :: cloneServer: opts.osDiskPath: ${opts.osDiskPath}")
+                log.info ("Ray :: cloneServer: vmFolder: ${vmFolder}")
+                log.info ("Ray :: cloneServer: networkName: ${networkName}")
                 def launchCommand = "New-VM -Name \"${opts.name}\" -MemoryStartupBytes ${opts.memory} -Generation ${generation} -VHDPath \"${osDiskPath}\" " +
                         "-BootDevice VHD -Path \"${vmFolder}\" -SwitchName \"${networkName}\" "
+                log.info ("Ray :: cloneServer: launchCommand: ${launchCommand}")
                 //-ComputerName ${opts.name}
                 //Parameter Set: Existing VHD
                 //New-VM [[-Name] <String> ] [[-MemoryStartupBytes] <Int64> ] [[-Generation] <Int16> ] -VHDPath <String> [-AsJob]
@@ -335,11 +387,14 @@ class HyperVApiService {
                 log.info("launchCommand: ${launchCommand}")
                 def out = executeCommand(launchCommand, opts)
 
+                log.info ("Ray :: cloneServer: out?.success: ${out?.success}")
+                log.info ("Ray :: cloneServer: out.data: ${out.data}")
 
                 log.debug("run server: ${out}")
                 if (out.success == true) {
                     //we need to fix SecureBoot
                     String secureBootCommand
+                    log.info ("Ray :: cloneServer: opts.secureBoot: ${opts.secureBoot}")
                     if (opts.secureBoot) {
                         secureBootCommand = "Set-VMFirmware \"${opts.name}\" -EnableSecureBoot On"
                     } else {
