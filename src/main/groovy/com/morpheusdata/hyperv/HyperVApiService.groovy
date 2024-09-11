@@ -134,8 +134,8 @@ class HyperVApiService {
             log.info ("Ray :: transferImage: fileAction: ${fileAction}")
             // TODO: need to check:
             //def filePromise = opts.commandService.sendAction(opts.hypervisor, fileAction, [timeout: 1800000l])
-            morpheusContext.services.fileCopy.copyToServer(server, fileAction.tgtFilename,)
-            copyToServer(ComputeServer server, String fileName, String filePath, InputStream sourceStream, Long contentLength);
+            //morpheusContext.services.fileCopy.copyToServer(server, fileAction.tgtFilename,)
+            //copyToServer(ComputeServer server, String fileName, String filePath, InputStream sourceStream, Long contentLength);
             //need sever from opts, fileAction.tgtFilename, fileAction.tgtUrl, getSourceStream from vhdCloudFile same as xen,
             //def fileResults = filePromise.get(1000l * 60l * 15l)
            // rtn.success = fileResults?.success == true
