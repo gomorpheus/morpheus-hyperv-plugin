@@ -21,12 +21,6 @@ class HyperVApiService {
     static defaultRoot = 'C:\\morpheus'
 
     def executeCommand(command, opts) {
-        log.info ("Ray :: executeCommand: command: ${command}")
-        log.info ("Ray :: executeCommand: opts: ${opts}")
-        log.info ("Ray :: executeCommand: opts.sshHost: ${opts.sshHost}")
-        log.info ("Ray :: executeCommand: opts.sshPort: ${opts.sshPort}")
-        log.info ("Ray :: executeCommand: opts.sshUsername: ${opts.sshUsername}")
-        log.info ("Ray :: executeCommand: opts.sshPassword: ${opts.sshPassword}")
         def output = morpheusContext.executeWindowsCommand(opts.sshHost, opts.sshPort?.toInteger(), opts.sshUsername, opts.sshPassword, command, null, false).blockingGet()
         return output
     }
@@ -127,18 +121,30 @@ class HyperVApiService {
             log.info ("Ray :: transferImage: tgtUrl: ${tgtUrl}")
             log.info("vhd url: ${tgtUrl}")
             fileList << [inline    : true, action: 'download', content: tgtUrl.bytes.encodeAsBase64(),
-                         targetPath: "${tgtFolder}\\${tgtFilename}".toString(), tgtFilename: tgtFilename]
+                         targetPath: "${tgtFolder}".toString(), tgtFilename: tgtFilename, tgtUrl: tgtUrl, vhdFile: vhdFile]
         }
         log.info ("Ray :: transferImage: opts.hypervisor: ${opts.hypervisor}")
         fileList.each { fileAction ->
             log.info ("Ray :: transferImage: fileAction: ${fileAction}")
             // TODO: need to check:
+
             //def filePromise = opts.commandService.sendAction(opts.hypervisor, fileAction, [timeout: 1800000l])
-            //morpheusContext.services.fileCopy.copyToServer(server, fileAction.tgtFilename,)
+            InputStream sourceStream = fileAction.vhdFile.inputStream
+            //log.info ("Ray :: transferImage: sourceStream: ${sourceStream?.bytes?.size()}")
+            Long contentLength = fileAction.vhdFile?.getContentLength()
+            log.info ("Ray :: transferImage: contentLength: ${contentLength}")
+            log.info ("Ray :: transferImage: opts.server?.id: ${opts.server?.id}")
+            try {
+                def fileResults = morpheusContext.async.fileCopy.copyToServer(opts.server, fileAction.tgtFilename, fileAction.targetPath, sourceStream, contentLength).blockingGet()
+                log.info ("Ray :: transferImage: fileResults?.success: ${fileResults?.success}")
+            } catch(ex) {
+                log.error("Ray :: error in fileresults: ${ex}")
+            }
+
             //copyToServer(ComputeServer server, String fileName, String filePath, InputStream sourceStream, Long contentLength);
             //need sever from opts, fileAction.tgtFilename, fileAction.tgtUrl, getSourceStream from vhdCloudFile same as xen,
             //def fileResults = filePromise.get(1000l * 60l * 15l)
-           // rtn.success = fileResults?.success == true
+            //rtn.success = fileResults?.success == true
             rtn.success = true
         }
 

@@ -153,6 +153,27 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				custom:false,
 				fieldClass:null
 		)
+		options << new OptionType(
+				name: 'host',
+				code: 'provisionType.hyperv.host',
+				category: 'provisionType.hyperv',
+				inputType: OptionType.InputType.SELECT,
+				fieldName: 'hypervHostId',
+				fieldContext: 'config',
+				fieldCode: 'gomorpheus.optiontype.Host',
+				fieldLabel: 'Host',
+				fieldGroup:'Options',
+				displayOrder: 10,
+				required: true,
+				enabled: true,
+				editable:false,
+				global:false,
+				placeHolder:null,
+				helpBlock:'',
+				defaultValue:null,
+				custom:false,
+				fieldClass:null
+		)
 
 		return options
 	}
@@ -540,6 +561,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					hypervOpts.user = workload.instance.createdBy
 					hypervOpts.virtualImage = virtualImage
 					hypervOpts.zone = cloud
+					hypervOpts.server = node
 					log.info ("Ray :: runWorkload: hypervOpts.userId: ${hypervOpts.userId}")
 					//hypervOpts.applianceServerUrl = applianceServerUrl
 					log.debug "hypervOpts: ${hypervOpts}"
@@ -559,9 +581,10 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						log.info ("Ray :: runWorkload: locationConfig: ${locationConfig}")
 						//virtualImageService.addVirtualImageLocation(virtualImage, imageId, opts.zone.id) // check: same as imagesync
 						VirtualImageLocation location = new VirtualImageLocation(locationConfig)
-						virtualImage.imageLocations << location
-						def saved = context.services.virtualImage.save(virtualImage)
-						log.info ("Ray :: runWorkload: saved?.imageLocations?.size(): ${saved?.imageLocations?.size()}")
+						//virtualImage.imageLocations << location
+						def saved = context.services.virtualImage.location.create(location)
+						log.info ("Ray :: runWorkload: saved: ${saved}")
+						log.info ("Ray :: runWorkload: saved?.imageLocations?name: ${saved?.virtualImage?.name}")
 
 					} else {
 						provisionResponse.success = false
@@ -652,6 +675,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				hypervOpts.imageId = imageId
 				log.info ("Ray :: runWorkload: hypervOpts.imageId: ${hypervOpts.imageId}")
 				//hypervOpts.diskMap = virtualImageService.getImageDiskMap(virtualImage) // TODO: TBU check:
+				hypervOpts.diskMap = context.services.virtualImage.getImageDiskMap(virtualImage)
 				log.info ("Ray :: runWorkload: hypervOpts111: ${hypervOpts}")
 				hypervOpts += HypervOptsUtility.getHypervWorkloadOpts(context, workload)
 				log.info ("Ray :: runWorkload: hypervOpts222: ${hypervOpts}")
