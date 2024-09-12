@@ -226,17 +226,20 @@ class HyperVApiService {
     def createDisk(opts, diskPath, diskSize) {
         def command = "New-VHD -Path \"${diskPath}\" -SizeBytes ${diskSize} -Dynamic"
         log.debug "createDisk command: ${command}"
+        log.info ("Ray :: createDisk: command: ${command}")
         return executeCommand(command, opts)
     }
 
     def attachDisk(opts, vmId, diskPath) {
         def command = "Add-VMHardDiskDrive -VMName \"${vmId}\" -Path \"${diskPath}\""
         log.debug "attachDisk command: ${command}"
+        log.info ("Ray :: attachDisk: command: ${command}")
         return executeCommand(command, opts)
     }
 
     def resizeDisk(opts, diskPath, diskSize) {
         def command = "Resize-VHD -Path \"${diskPath}\" -SizeBytes ${diskSize}"
+        log.info ("Ray :: resizeDisk: command: ${command}")
         log.debug "resizeDisk: ${command}"
         return executeCommand(command, opts)
     }
@@ -401,42 +404,60 @@ class HyperVApiService {
                     //we need to fix SecureBoot
                     String secureBootCommand
                     log.info ("Ray :: cloneServer: opts.secureBoot: ${opts.secureBoot}")
+                    log.info ("Ray :: cloneServer: opts.name: ${opts.name}")
                     if (opts.secureBoot) {
                         secureBootCommand = "Set-VMFirmware \"${opts.name}\" -EnableSecureBoot On"
                     } else {
                         secureBootCommand = "Set-VMFirmware \"${opts.name}\" -EnableSecureBoot Off"
                     }
+                    log.info ("Ray :: cloneServer: secureBootCommand: ${secureBootCommand}")
+
                     executeCommand(secureBootCommand, opts)
                     //if we have to tag it to a VLAN
+                    log.info ("Ray :: cloneServer: opts.networkConfig.primaryInterface.network.vlanId: ${opts.networkConfig.primaryInterface.network.vlanId}")
                     if (opts.networkConfig.primaryInterface.network.vlanId) {
                         String setVlanCommand = "Set-VMNetworkAdapterVlan -VMName \"${opts.name}\" -Access -VlanId ${opts.networkConfig.primaryInterface.network.vlanId}"
+                        log.info ("Ray :: cloneServer: setVlanCommand: ${setVlanCommand}")
                         executeCommand(setVlanCommand, opts)
                     }
                     //add additional NICS
+                    log.info ("Ray :: cloneServer: additionalNetworks?.size(): ${additionalNetworks?.size()}")
                     if (additionalNetworks) {
                         additionalNetworks.each { additionalNetwork ->
                             def addNetworkCommand = "Add-VMNetworkAdapter -VMName \"${opts.name}\" -Name \"${additionalNetwork.name}\" -SwitchName \"${additionalNetwork.switchName}\""
+                            log.info ("Ray :: cloneServer: addNetworkCommand: ${addNetworkCommand}")
                             executeCommand(addNetworkCommand, opts)
+                            log.info ("Ray :: cloneServer: additionalNetwork?.vlanId: ${additionalNetwork?.vlanId}")
                             if (additionalNetwork.vlanId) {
                                 String setVlanCommand = "Set-VMNetworkAdapterVlan -VMName \"${opts.name}\" -VMNetworkAdapterName \"${additionalNetwork.name}\" -Access -VlanId ${additionalNetwork.vlanId}"
+                                log.info ("Ray :: cloneServer: setVlanCommand: ${setVlanCommand}")
                                 executeCommand(setVlanCommand, opts)
                             }
                         }
                     }
                     //resize disk
+                    log.info ("Ray :: cloneServer: opts.osDiskSize: ${opts.osDiskSize}")
                     if (opts.osDiskSize)
                         resizeDisk(opts, osDiskPath, opts.osDiskSize)
                     //add disk
+                    log.info ("Ray :: cloneServer: opts.dataDisks?.size(): ${opts.dataDisks?.size()}")
+                    log.info ("Ray :: cloneServer: opts.dataDiskSize: ${opts.dataDiskSize}")
                     if (opts.dataDisks?.size() > 0) {
                         opts.dataDisks?.eachWithIndex { disk, index ->
                             def diskIndex = "${index + 1}"
+                            log.info ("Ray :: cloneServer: diskIndex: ${diskIndex}")
                             def dataDisk = "dataDisk${diskIndex}.vhd"
+                            log.info ("Ray :: cloneServer: dataDisk: ${dataDisk}")
+                            log.info ("Ray :: cloneServer: generation: ${generation}")
                             if (generation == 2) {
                                 dataDisk = "dataDisk${diskIndex}.vhdx"
                             }
 
+                            log.info ("Ray :: cloneServer: dataDisk1: ${dataDisk}")
                             def newDiskPath = "${diskFolder}\\${dataDisk}"
+                            log.info ("Ray :: cloneServer: newDiskPath: ${newDiskPath}")
                             //if this is a clone/restore we have already copied the disk, otherwise need to create it
+                            log.info ("Ray :: cloneServer: opts.snapshotId): ${opts.snapshotId}")
                             if (!opts.snapshotId) {
                                 createDisk(opts, newDiskPath, disk.maxStorage)
                             }
@@ -448,6 +469,7 @@ class HyperVApiService {
                         disks << [dataDisks: []]
                         def dataDisk = "dataDisk1.vhd"
                         def newDiskPath = "${diskFolder}\\${dataDisk}"
+                        log.info ("Ray :: cloneServer: newDiskPath: ${newDiskPath}")
                         //if this is a clone/restore we have already copied the disk, otherwise need to create it
                         if (!opts.snapshotId) {
                             createDisk(opts, newDiskPath, opts.dataDiskSize)
@@ -455,6 +477,8 @@ class HyperVApiService {
                         attachDisk(opts, opts.name, newDiskPath)
                     }
                     //cpu
+                    log.info ("Ray :: cloneServer: opts.maxCores: ${opts.maxCores}")
+                    log.info ("Ray :: cloneServer: opts.maxCores: ${opts.maxCores}")
                     if (opts.maxCores && opts.maxCores > 0) {
                         updateServer(opts, opts.name, [maxCores: opts.maxCores])
                     }
@@ -464,7 +488,7 @@ class HyperVApiService {
                     //cloud init
                     if (opts.cloudConfigBytes) {
                         def isoAction = [inline: true, action: 'rawfile', content: opts.cloudConfigBytes.encodeAsBase64(), targetPath: "${diskFolder}\\config.iso".toString(), opts: [:]]
-                        def isoPromise = opts.commandService.sendAction(opts.hypervisor, isoAction)
+                        def isoPromise = opts.commandService.sendAction(opts.hypervisor, isoAction) // check:
                         def isoResults = isoPromise.get(1000l * 60l * 3l)
                         if (generation == 2) {
                             createCdrom(opts, opts.name, "${diskFolder}\\config.iso")
@@ -1247,5 +1271,6 @@ class HyperVApiService {
     def formatImageFolder(imageName) {
         def rtn = imageName
         rtn = rtn.replaceAll(' ', '_')
+        rtn = rtn.replaceAll('\\.', '_')
     }
 }
