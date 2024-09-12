@@ -19,15 +19,15 @@ resource "workload-type" "ubuntu-hyperv-16_04" {
   backupType       = "hypervSnapshot"
 }
 
-resource "workload-type-set" "ubuntu-hyperv-16.04-set" {
+resource "workload-type-set" "ubuntu-hyperv-16_04-set" {
   code            = "ubuntu-hyperv-16.04-set"
-  containerType  = container-type.ubuntu-hyperv-16.04
+  workloadType  = workload-type.ubuntu-hyperv-16_04
   priorityOrder  = 0
   dynamicCount   = true
   containerCount = 1
 }
 
-resource "instance-type-layout" "ubuntu-hyperv-16.04" {
+resource "instance-type-layout" "ubuntu-hyperv-16_04" {
   code                        = "ubuntu-hyperv-16.04"
   name                        = "Hyper-V VM"
   sortOrder                  = 16
@@ -40,15 +40,15 @@ resource "instance-type-layout" "ubuntu-hyperv-16.04" {
   portCount                  = 1
   enabled                     = true
   creatable                   = true
-  workloads                  = [workload-type-set.ubuntu-hyperv-16.04-set]
+  workloads                  = [workload-type-set.ubuntu-hyperv-16_04-set]
   actions                     = ["ubuntu-add-node"]
   provisionType              = "hyperv"
 }
 
-resource "scale-action" "ubuntu-hyperv-16.04" {
+resource "scale-action" "ubuntu-hyperv-16_04" {
   code        = "ubuntu-hyperv-16.04"
   scaleType  = "action"
-  layout      = instance-type-layout.ubuntu-hyperv-16.04
+  layout      = instance-type-layout.ubuntu-hyperv-16_04
   upAction   = "ubuntu-add-node"
   downAction = "ubuntu-remove-node"
 }

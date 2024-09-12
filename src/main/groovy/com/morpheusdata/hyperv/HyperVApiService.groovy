@@ -77,7 +77,7 @@ class HyperVApiService {
         def dirResults = executeCommand(command, opts)
 
         if (metadataFile) {
-            def tgtUrl = morpheusContext.services.virtualImage.getCloudFileStreamUrl(opts.image, metadataFile, opts.user, opts.zone)
+            def tgtUrl = morpheusContext.services.virtualImage.getCloudFileStreamUrl(opts.virtualImage, metadataFile, opts.user, opts.zone)
             tgtUrl = tgtUrl.replace("https", "http")
             log.debug("metadata url: ${tgtUrl}")
             fileList << [inline    : true, action: 'download', content: tgtUrl.bytes.encodeAsBase64(),
@@ -85,14 +85,19 @@ class HyperVApiService {
         }
         vhdFiles.each { vhdFile ->
             def tgtFilename = extractImageFileName(vhdFile.name)
-            def tgtUrl = morpheusContext.services.virtualImage.getCloudFileStreamUrl(opts.image, vhdFile, opts.user, opts.zone)
+            def tgtUrl = morpheusContext.services.virtualImage.getCloudFileStreamUrl(opts.virtualImage, vhdFile, opts.user, opts.zone)
             log.info("vhd url: ${tgtUrl}")
             fileList << [inline    : true, action: 'download', content: tgtUrl.bytes.encodeAsBase64(),
-                         targetPath: "${tgtFolder}\\${tgtFilename}".toString()]
+                         targetPath: "${tgtFolder}".toString(), tgtFilename: tgtFilename, tgtUrl: tgtUrl, vhdFile: vhdFile]
         }
         fileList.each { fileAction ->
-            def filePromise = opts.commandService.sendAction(opts.hypervisor, fileAction, [timeout: 1800000l])
+            InputStream sourceStream = fileAction.vhdFile.inputStream
+            Long contentLength = fileAction.vhdFile?.getContentLength()
+            // TODO: This implementation need to check
+            /*def filePromise = opts.commandService.sendAction(opts.hypervisor, fileAction, [timeout: 1800000l])
             def fileResults = filePromise.get(1000l * 60l * 15l)
+            rtn.success = fileResults?.success == true*/
+            def fileResults = morpheusContext.async.fileCopy.copyToServer(opts.server, fileAction.tgtFilename, fileAction.targetPath, sourceStream, contentLength).blockingGet()
             rtn.success = fileResults?.success == true
         }
 
@@ -264,8 +269,7 @@ class HyperVApiService {
                 def imageFolderName = opts.serverFolder
                 def networkName = opts.network?.name
                 def diskFolder = "${diskRoot}\\${imageFolderName}"
-//                def bootDiskName = opts.diskMap?.bootDisk?.fileName ?: 'ubuntu-14_04.vhd'
-                def bootDiskName = 'ubuntu-14_04.vhd'
+                def bootDiskName = opts.diskMap?.bootDisk?.fileName ?: 'morpheus-ubuntu-22_04-amd64-20240604.vhd'
                 disks.osDisk = [externalId: bootDiskName]
                 def osDiskPath = diskFolder + '\\' + bootDiskName
                 def vmFolder = "${vmRoot}\\${imageFolderName}"
@@ -296,30 +300,37 @@ class HyperVApiService {
                 //[-BootDevice <BootDevice> {CD | Floppy | LegacyNetworkAdapter | IDE | NetworkAdapter | VHD} ] [-ComputerName <String[]> ]
                 //[-Path <String> ] [-SwitchName <String> ] [-Confirm] [-WhatIf] [ <CommonParameters>]
                 //run it
-                log.info("launchCommand: ${launchCommand}")
+//                log.info("launchCommand: ${launchCommand}")
+                log.info("RAZI :: launchCommand: ${launchCommand}")
                 def out = executeCommand(launchCommand, opts)
 
-
+                log.info("RAZI :: run server: ${out}")
                 log.debug("run server: ${out}")
+                log.info("RAZI :: out.success: ${out.success}")
                 if (out.success == true) {
                     //we need to fix SecureBoot
                     String secureBootCommand
+                    log.info("RAZI :: opts.secureBoot: ${opts.secureBoot}")
                     if (opts.secureBoot) {
                         secureBootCommand = "Set-VMFirmware \"${opts.name}\" -EnableSecureBoot On"
                     } else {
                         secureBootCommand = "Set-VMFirmware \"${opts.name}\" -EnableSecureBoot Off"
                     }
+                    log.info("RAZI :: secureBootCommand: ${secureBootCommand}")
                     executeCommand(secureBootCommand, opts)
                     //if we have to tag it to a VLAN
+                    log.info("RAZI :: opts.networkConfig.primaryInterface.network.vlanId: ${opts.networkConfig.primaryInterface.network.vlanId}")
                     if (opts.networkConfig.primaryInterface.network.vlanId) {
                         String setVlanCommand = "Set-VMNetworkAdapterVlan -VMName \"${opts.name}\" -Access -VlanId ${opts.networkConfig.primaryInterface.network.vlanId}"
                         executeCommand(setVlanCommand, opts)
                     }
                     //add additional NICS
+                    log.info("RAZI :: additionalNetworks: ${additionalNetworks}")
                     if (additionalNetworks) {
                         additionalNetworks.each { additionalNetwork ->
                             def addNetworkCommand = "Add-VMNetworkAdapter -VMName \"${opts.name}\" -Name \"${additionalNetwork.name}\" -SwitchName \"${additionalNetwork.switchName}\""
                             executeCommand(addNetworkCommand, opts)
+                            log.info("RAZI :: additionalNetwork.vlanId: ${additionalNetwork.vlanId}")
                             if (additionalNetwork.vlanId) {
                                 String setVlanCommand = "Set-VMNetworkAdapterVlan -VMName \"${opts.name}\" -VMNetworkAdapterName \"${additionalNetwork.name}\" -Access -VlanId ${additionalNetwork.vlanId}"
                                 executeCommand(setVlanCommand, opts)
@@ -327,6 +338,7 @@ class HyperVApiService {
                         }
                     }
                     //resize disk
+                    log.info("RAZI :: opts.osDiskSize: ${opts.osDiskSize}")
                     if (opts.osDiskSize)
                         resizeDisk(opts, osDiskPath, opts.osDiskSize)
                     //add disk
@@ -362,13 +374,15 @@ class HyperVApiService {
                         updateServer(opts, opts.name, [maxCores: opts.maxCores])
                     }
                     enableDynamicMemory(opts)
+                    log.info("RAZI :: enableDynamicMemory called")
 
                     //need to add non boot disks from the diskMap - TODO
                     //cloud init
                     if (opts.cloudConfigBytes) {
                         def isoAction = [inline: true, action: 'rawfile', content: opts.cloudConfigBytes.encodeAsBase64(), targetPath: "${diskFolder}\\config.iso".toString(), opts: [:]]
-                        def isoPromise = opts.commandService.sendAction(opts.hypervisor, isoAction)
-                        def isoResults = isoPromise.get(1000l * 60l * 3l)
+                        // TODO: need to check commandService, not available for now
+                        /*def isoPromise = opts.commandService.sendAction(opts.hypervisor, isoAction)
+                        def isoResults = isoPromise.get(1000l * 60l * 3l)*/
                         if (generation == 2) {
                             createCdrom(opts, opts.name, "${diskFolder}\\config.iso")
                         } else {
@@ -377,13 +391,16 @@ class HyperVApiService {
                     }
                     //start it
                     sleep(10000) // just a test
-                    log.info("Starting Server  ${opts.name}")
+//                    log.info("Starting Server  ${opts.name}")
+                    log.info("RAZI :: Starting Server  ${opts.name}")
                     startServer(opts, opts.name)
+                    log.info("RAZI :: startServer called")
                     //get details
 //                    log.info("Hyperv Check for Server Ready ${opts.name}")
                     log.info("RAZI :: opts for checkServerReady: ${opts}")
                     log.info("RAZI :: opts.name for checkServerReady: ${opts.name}")
                     def serverDetail = checkServerReady(opts, opts.name)
+                    log.info("RAZI :: cloneServer >> serverDetail: ${serverDetail}")
                     if (serverDetail.success == true) {
                         // write ip address to notes here
                         updateServer(opts, opts.name, [notes: serverDetail.server?.ipAddress])
@@ -397,6 +414,7 @@ class HyperVApiService {
         } catch (e) {
             log.error("cloneServer error: ${e}", e)
         }
+        log.info("RAZI :: cloneServer >> final rtn: ${rtn}")
         return rtn
     }
 
