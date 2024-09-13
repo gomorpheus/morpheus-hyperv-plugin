@@ -664,7 +664,7 @@ class HyperVApiService {
         try {
             def command = "Remove-VM –Name \"${vmId}\" -Force"
             def out = executeCommand(command, opts)
-            rtn.success = out.success && out.exitValue == 0
+            rtn.success = out.success && out.exitCode == '0'
             println("remove server: ${out}")
         } catch (e) {
             log.error("removeServer error: ${e}", e)
