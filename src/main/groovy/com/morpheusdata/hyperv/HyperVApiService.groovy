@@ -134,8 +134,19 @@ class HyperVApiService {
             Long contentLength = fileAction.vhdFile?.getContentLength()
             log.info ("Ray :: transferImage: contentLength: ${contentLength}")
             log.info ("Ray :: transferImage: opts.server?.id: ${opts.server?.id}")
+            log.info ("copyToServer arguments: server: ${opts.server}")
+            log.info ("copyToServer arguments: server_id: ${opts.server?.id}")
+            log.info ("copyToServer arguments: server_name: ${opts.server?.name}")
+            log.info ("copyToServer arguments: fileName: ${fileAction.tgtFilename}")
+            log.info ("copyToServer arguments: filePath: ${fileAction.targetPath}")
+            log.info ("copyToServer arguments: sourceStream_size: ${sourceStream?.bytes.size()}")
+            log.info ("copyToServer arguments: contentLength: ${contentLength}")
             try {
                 def fileResults = morpheusContext.async.fileCopy.copyToServer(opts.server, fileAction.tgtFilename, fileAction.targetPath, sourceStream, contentLength).blockingGet()
+                //def fileResults = morpheusContext.async.fileCopy.copyToServer(opts.server, "morpheus-ubuntu-18_04_3-v1-amd64.vhd", "c:\\Morpheus\\images\\Morpheus_Ubuntu_18_04_3_v1", sourceStream, 1044605314).blockingGet()
+
+                //def fileResults = morpheusContext.async.fileCopy.copyToServer(opts.server, "morpheus-ubuntu-18_04_3-v1-amd64.vhd", "c:\\Morpheus\\images\\Morpheus_Ubuntu_18_04_3_v1", sourceStream, contentLength).blockingGet()
+
                 log.info ("Ray :: transferImage: fileResults?.success: ${fileResults?.success}")
             } catch(ex) {
                 log.error("Ray :: error in fileresults: ${ex}")
@@ -145,7 +156,7 @@ class HyperVApiService {
             //need sever from opts, fileAction.tgtFilename, fileAction.tgtUrl, getSourceStream from vhdCloudFile same as xen,
             //def fileResults = filePromise.get(1000l * 60l * 15l)
             //rtn.success = fileResults?.success == true
-            rtn.success = true
+            //rtn.success = true
         }
 
         log.info ("Ray :: transferImage: rtn: ${rtn}")
