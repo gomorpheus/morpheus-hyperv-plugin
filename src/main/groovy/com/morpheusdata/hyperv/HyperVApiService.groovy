@@ -4,6 +4,7 @@ import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.model.ComputeServer
 import groovy.json.JsonOutput
 import groovy.util.logging.Slf4j
+import com.bertramlabs.plugins.karman.CloudFile
 
 /**
  * @author rahul.ray
@@ -77,9 +78,9 @@ class HyperVApiService {
         log.info ("Ray :: transferImage: cloudFiles: ${cloudFiles}")
         log.info ("Ray :: transferImage: imageName: ${imageName}")
         def rtn = [success: false, results: []]
-        def metadataFile = cloudFiles?.findAll { cloudFile -> cloudFile.name == 'metadata.json' }
+        CloudFile metadataFile = (CloudFile) cloudFiles?.find { cloudFile -> cloudFile.name == 'metadata.json' }
         log.info ("Ray :: transferImage: metadataFile?.size(): ${metadataFile?.size()}")
-        def vhdFiles = cloudFiles?.findAll { cloudFile -> cloudFile.name.indexOf('.vhd') > -1 || cloudFile.name.indexOf('.vhdx') }
+        def vhdFiles = cloudFiles?.findAll { cloudFile -> cloudFile.name.indexOf(".morpkg") == -1 && (cloudFile.name.indexOf('.vhd') > -1 || cloudFile.name.indexOf('.vhdx')) }
         log.info ("Ray :: transferImage: vhdFiles: ${vhdFiles}")
         log.info ("Ray :: transferImage: vhdFiles?.size(): ${vhdFiles?.size()}")
         log.info("vhdFiles: ${vhdFiles}")
@@ -100,49 +101,30 @@ class HyperVApiService {
         log.info ("Ray :: transferImage: dirResults: ${dirResults}")
         log.info ("Ray :: transferImage: metadataFile: ${metadataFile}")
         if (metadataFile) {
-            def tgtUrl = morpheusContext.services.virtualImage.getCloudFileStreamUrl(opts.virtualImage, metadataFile, opts.user, opts.zone)
-            log.info ("Ray :: transferImage: tgtUrl: ${tgtUrl}")
-            tgtUrl = tgtUrl.replace("https", "http")
-            log.info ("Ray :: transferImage: tgtUrl1: ${tgtUrl}")
-            log.debug("metadata url: ${tgtUrl}")
-            fileList << [inline    : true, action: 'download', content: tgtUrl.bytes.encodeAsBase64(),
-                         targetPath: "${tgtFolder}\\metadata.json".toString()]
-            log.info ("Ray :: transferImage: fileList: ${fileList}")
+            fileList << [inputStream: metadataFile.inputStream, contentLength: metadataFile.contentLength, targetPath: "${tgtFolder}\\metadata.json".toString(), tgtFilename: "metadata.json"]
         }
-        vhdFiles.each { vhdFile ->
+        vhdFiles.each { CloudFile vhdFile ->
             log.info ("Ray :: transferImage: vhdFile.name: ${vhdFile.name}")
             def tgtFilename = extractImageFileName(vhdFile.name)
-            log.info ("Ray :: transferImage: tgtFilename: ${tgtFilename}")
-            log.info ("Ray :: transferImage: opts.virtualImage: ${opts.virtualImage}")
-            log.info ("Ray :: transferImage: vhdFile: ${vhdFile}")
-            log.info ("Ray :: transferImage: opts.user: ${opts.user}")
-            log.info ("Ray :: transferImage: opts.zone: ${opts.zone}")
-            def tgtUrl = morpheusContext.services.virtualImage.getCloudFileStreamUrl(opts.virtualImage, vhdFile, opts.user, opts.zone)
-            log.info ("Ray :: transferImage: tgtUrl: ${tgtUrl}")
-            log.info("vhd url: ${tgtUrl}")
-            fileList << [inline    : true, action: 'download', content: tgtUrl.bytes.encodeAsBase64(),
-                         targetPath: "${tgtFolder}".toString(), tgtFilename: tgtFilename, tgtUrl: tgtUrl, vhdFile: vhdFile]
+            fileList << [inputStream: vhdFile.inputStream, contentLength: vhdFile.getContentLength(), targetPath: "${tgtFolder}\\${tgtFilename}".toString(), tgtFilename: tgtFilename]
         }
         log.info ("Ray :: transferImage: opts.hypervisor: ${opts.hypervisor}")
-        fileList.each { fileAction ->
-            log.info ("Ray :: transferImage: fileAction: ${fileAction}")
+        fileList.each { fileItem ->
+            log.info ("Ray :: transferImage: fileAction: ${fileItem}")
             // TODO: need to check:
 
             //def filePromise = opts.commandService.sendAction(opts.hypervisor, fileAction, [timeout: 1800000l])
-            InputStream sourceStream = fileAction.vhdFile.inputStream
             //log.info ("Ray :: transferImage: sourceStream: ${sourceStream?.bytes?.size()}")
-            Long contentLength = fileAction.vhdFile?.getContentLength()
-            log.info ("Ray :: transferImage: contentLength: ${contentLength}")
+            log.info ("Ray :: transferImage: contentLength: ${fileItem.contentLength}")
             log.info ("Ray :: transferImage: opts.server?.id: ${opts.server?.id}")
             log.info ("copyToServer arguments: server: ${opts.server}")
             log.info ("copyToServer arguments: server_id: ${opts.server?.id}")
             log.info ("copyToServer arguments: server_name: ${opts.server?.name}")
-            log.info ("copyToServer arguments: fileName: ${fileAction.tgtFilename}")
-            log.info ("copyToServer arguments: filePath: ${fileAction.targetPath}")
-            log.info ("copyToServer arguments: sourceStream_size: ${sourceStream?.bytes.size()}")
-            log.info ("copyToServer arguments: contentLength: ${contentLength}")
+            log.info ("copyToServer arguments: fileName: ${fileItem.tgtFilename}")
+            log.info ("copyToServer arguments: filePath: ${fileItem.targetPath}")
+            log.info ("copyToServer arguments: contentLength: ${fileItem.contentLength}")
             try {
-                def fileResults = morpheusContext.async.fileCopy.copyToServer(opts.server, fileAction.tgtFilename, fileAction.targetPath, sourceStream, contentLength).blockingGet()
+                def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.server, fileItem.tgtFilename, fileItem.targetPath, new BufferedInputStream(fileItem.inputStream, 16384), fileItem.contentLength)
                 //def fileResults = morpheusContext.async.fileCopy.copyToServer(opts.server, "morpheus-ubuntu-18_04_3-v1-amd64.vhd", "c:\\Morpheus\\images\\Morpheus_Ubuntu_18_04_3_v1", sourceStream, 1044605314).blockingGet()
 
                 //def fileResults = morpheusContext.async.fileCopy.copyToServer(opts.server, "morpheus-ubuntu-18_04_3-v1-amd64.vhd", "c:\\Morpheus\\images\\Morpheus_Ubuntu_18_04_3_v1", sourceStream, contentLength).blockingGet()
