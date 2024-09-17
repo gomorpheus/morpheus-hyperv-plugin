@@ -124,12 +124,13 @@ class HyperVApiService {
             log.info ("copyToServer arguments: filePath: ${fileItem.targetPath}")
             log.info ("copyToServer arguments: contentLength: ${fileItem.contentLength}")
             try {
-                def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.server, fileItem.tgtFilename, fileItem.targetPath, new BufferedInputStream(fileItem.inputStream, 16384), fileItem.contentLength)
+                def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.server, fileItem.tgtFilename, fileItem.targetPath, fileItem.inputStream, fileItem.contentLength)
                 //def fileResults = morpheusContext.async.fileCopy.copyToServer(opts.server, "morpheus-ubuntu-18_04_3-v1-amd64.vhd", "c:\\Morpheus\\images\\Morpheus_Ubuntu_18_04_3_v1", sourceStream, 1044605314).blockingGet()
 
                 //def fileResults = morpheusContext.async.fileCopy.copyToServer(opts.server, "morpheus-ubuntu-18_04_3-v1-amd64.vhd", "c:\\Morpheus\\images\\Morpheus_Ubuntu_18_04_3_v1", sourceStream, contentLength).blockingGet()
 
                 log.info ("Ray :: transferImage: fileResults?.success: ${fileResults?.success}")
+				rtn.success = fileResults.success
             } catch(ex) {
                 log.error("Ray :: error in fileresults: ${ex}")
             }
