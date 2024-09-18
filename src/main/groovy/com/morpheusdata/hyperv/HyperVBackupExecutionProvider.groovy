@@ -4,22 +4,27 @@ import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.backup.BackupExecutionProvider
 import com.morpheusdata.core.backup.response.BackupExecutionResponse
+import com.morpheusdata.hyperv.utils.HypervOptsUtility
 import com.morpheusdata.model.Backup
 import com.morpheusdata.model.BackupResult
 import com.morpheusdata.model.Cloud
 import com.morpheusdata.model.ComputeServer
+import com.morpheusdata.model.Workload
+import com.morpheusdata.model.projection.SnapshotIdentityProjection
 import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
 
 @Slf4j
 class HyperVBackupExecutionProvider implements BackupExecutionProvider {
 
-	Plugin plugin
+	HyperVPlugin plugin
 	MorpheusContext morpheusContext
+	HyperVApiService apiService
 
-	HyperVBackupExecutionProvider(Plugin plugin, MorpheusContext morpheusContext) {
+	HyperVBackupExecutionProvider(HyperVPlugin plugin, MorpheusContext morpheusContext) {
 		this.plugin = plugin
 		this.morpheusContext = morpheusContext
+		this.apiService = new HyperVApiService(morpheusContext)
 	}
 	
 	/**
@@ -97,7 +102,54 @@ class HyperVBackupExecutionProvider implements BackupExecutionProvider {
 	 */
 	@Override
 	ServiceResponse deleteBackupResult(BackupResult backupResult, Map opts) {
-		return ServiceResponse.success()
+		log.debug("Delete backup result {}", backupResult.id)
+
+		def rtn = [success:true]
+		try {
+			def config = backupResult.getConfigMap()
+			def snapshotId = config.snapshotId
+			if(snapshotId) {
+				def server
+				def cloudId = config.cloudId
+				def hypervisorId = config.hypervisorId
+				if (backupResult.serverId) {
+					server = morpheusContext.services.computeServer.get(backupResult.serverId)
+				} else {
+					def container = morpheusContext.services.workload.get(backupResult.containerId)
+					server = morpheusContext.services.computeServer.get(container.serverId)
+				}
+				opts = getAllHypervOptsForServer(server, cloudId, hypervisorId)
+				def serverExternalId = server?.externalId
+				def result
+				if (serverExternalId) {
+					result = apiService.deleteSnapshot(opts, serverExternalId, snapshotId)
+				} else {
+					result = [success: true]
+				}
+				if (!result.success) {
+					rtn.success = false
+				}
+			}
+		} catch(e) {
+			log.error("error in deleteBackupResult: {}", e,e)
+			rtn.success = false
+		}
+		return ServiceResponse.create(rtn)
+	}
+
+	def getAllHypervOptsForServer(server, cloudId=null, hypervisorId=null) {
+		def cloud
+		def parentServer
+		if(server) {
+			cloud = server.cloud
+			parentServer = server.parentServer
+		} else if(cloudId && hypervisorId) {
+			cloud = morpheusContext.services.computeServer.get(cloudId?.toLong())
+			parentServer = morpheusContext.services.computeServer.get(hypervisorId?.toLong())
+		}
+		def rtn = HypervOptsUtility.getHypervZoneOpts(morpheusContext, cloud)
+		rtn += HypervOptsUtility.getHypervHypervisorOpts(parentServer)
+		return rtn
 	}
 
 	/**
