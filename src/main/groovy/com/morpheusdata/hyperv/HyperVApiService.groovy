@@ -761,7 +761,7 @@ class HyperVApiService {
             def snapshotId = opts.snapshotId ?: "${vmId}.${System.currentTimeMillis()}"
             def command = "Checkpoint-VM -Name \"${vmId}\" -SnapshotName \"${snapshotId}\""
             def out = executeCommand(command, opts)
-            rtn.success = out.success && out.exitValue == 0
+            rtn.success = out.success && out.exitCode == '0'
             rtn.snapshotId = snapshotId
             log.debug("snapshot server: ${out}")
         } catch (e) {
