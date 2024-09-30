@@ -1,16 +1,14 @@
 package com.morpheusdata.hyperv
 
 import com.morpheusdata.core.MorpheusContext
-import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.backup.BackupExecutionProvider
 import com.morpheusdata.core.backup.response.BackupExecutionResponse
+import com.morpheusdata.core.backup.util.BackupResultUtility
 import com.morpheusdata.hyperv.utils.HypervOptsUtility
 import com.morpheusdata.model.Backup
 import com.morpheusdata.model.BackupResult
 import com.morpheusdata.model.Cloud
 import com.morpheusdata.model.ComputeServer
-import com.morpheusdata.model.Workload
-import com.morpheusdata.model.projection.SnapshotIdentityProjection
 import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
 
@@ -190,7 +188,56 @@ class HyperVBackupExecutionProvider implements BackupExecutionProvider {
 	 */
 	@Override
 	ServiceResponse<BackupExecutionResponse> executeBackup(Backup backup, BackupResult backupResult, Map executionConfig, Cloud cloud, ComputeServer computeServer, Map opts) {
-		return ServiceResponse.success(new BackupExecutionResponse(backupResult))
+		log.debug("executeBackup: executionConfig: {}, opts: {}", executionConfig, opts)
+		ServiceResponse<BackupExecutionResponse> rtn = ServiceResponse.prepare(new BackupExecutionResponse(backupResult))
+		try {
+			def container = morpheusContext.services.workload.get(executionConfig.containerId)
+			def snapshotName = "${computeServer.externalId}.${System.currentTimeMillis()}".toString()
+			def outputPath = executionConfig.workingPath
+			log.debug("outputPath: ${outputPath}")
+			def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(morpheusContext, container)
+			def hypervisorId = computeServer?.parentServer?.id
+			hypervOpts.snapshotId = snapshotName
+			def vmId = computeServer.externalId
+			def snapshotResults = apiService.snapshotServer(hypervOpts, vmId)
+			log.debug("backup complete: {}", snapshotResults)
+			if (snapshotResults.success) {
+				rtn.data.backupResult.backupSetId = executionConfig.backupResultId ?: BackupResultUtility.generateBackupResultSetId()
+				rtn.data.backupResult.executorIpAddress = executionConfig.ipAddress
+				rtn.data.backupResult.resultBase = 'hyperv'
+				rtn.data.backupResult.resultBucket = snapshotResults.snapshotId
+				rtn.data.backupResult.resultPath = snapshotResults.snapshotId
+				rtn.data.backupResult.resultArchive = snapshotResults.snapshotId
+				rtn.data.backupResult.sizeInMb = 0l
+				rtn.data.backupResult.status = BackupResult.Status.IN_PROGRESS
+				rtn.data.backupResult.snapshotId = snapshotResults.snapshotId
+				rtn.data.backupResult.snapshotId = snapshotResults.snapshotId
+				rtn.data.backupResult.zoneId = cloud.id
+				rtn.data.backupResult.setConfigProperty("vmId", vmId)
+				rtn.data.backupResult.setConfigProperty("hypervisorId", hypervisorId)
+				rtn.data.updates = true
+			} else {
+				//error
+				rtn.data.backupResult.backupSetId = executionConfig.backupResultId ?: BackupResultUtility.generateBackupResultSetId()
+				rtn.data.backupResult.executorIpAddress = executionConfig.ipAddress
+				rtn.data.backupResult.sizeInMb = 0l
+				rtn.data.backupResult.status = BackupResult.Status.FAILED
+				rtn.data.backupResult.errorOutput = snapshotResults.error?.toString().encodeAsBase64()
+				rtn.data.updates = true
+			}
+			rtn.success = true
+		} catch (e) {
+			log.error("executeBackup: ${e}", e)
+			rtn.msg = e.getMessage()
+			def error = "Failed to execute backup"
+			rtn.data.backupResult.backupSetId = executionConfig.backupResultId ?: BackupResultUtility.generateBackupResultSetId()
+			rtn.data.backupResult.executorIpAddress = executionConfig.ipAddress
+			rtn.data.backupResult.sizeInMb = 0l
+			rtn.data.backupResult.status = BackupResult.Status.FAILED
+			rtn.data.backupResult.errorOutput = error.encodeAsBase64()
+			rtn.data.updates = true
+		}
+		return rtn
 	}
 
 	/**
