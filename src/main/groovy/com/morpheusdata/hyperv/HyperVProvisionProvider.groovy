@@ -3,11 +3,14 @@ package com.morpheusdata.hyperv
 import com.morpheusdata.core.AbstractProvisionProvider
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
+import com.morpheusdata.core.providers.HostProvisionProvider
 import com.morpheusdata.core.providers.ProvisionProvider
 import com.morpheusdata.core.providers.WorkloadProvisionProvider
+import com.morpheusdata.core.util.ComputeUtility
 import com.morpheusdata.hyperv.utils.HypervOptsUtility
 import com.morpheusdata.model.*
 import com.morpheusdata.model.provisioning.WorkloadRequest
+import com.morpheusdata.request.ResizeRequest
 import com.morpheusdata.response.InitializeHypervisorResponse
 import com.morpheusdata.response.PrepareWorkloadResponse
 import com.morpheusdata.response.ProvisionResponse
@@ -15,7 +18,7 @@ import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
 
 @Slf4j
-class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, ProvisionProvider.HypervisorProvisionFacet, ProvisionProvider.BlockDeviceNameFacet {
+class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, ProvisionProvider.HypervisorProvisionFacet, HostProvisionProvider.ResizeFacet, ProvisionProvider.BlockDeviceNameFacet {
 	public static final String PROVIDER_CODE = 'hyperv.provision'
 	public static final String PROVISION_PROVIDER_CODE = 'hyperv'
 	public static final diskNames = ['sda', 'sdb', 'sdc', 'sdd', 'sde', 'sdf', 'sdg', 'sdh', 'sdi', 'sdj', 'sdk', 'sdl']
@@ -365,7 +368,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			log.error("stopServer error: ${e}", e)
 			rtn.msg = e.message
 		}
-		return new ServiceResponse(rtn)
+		return ServiceResponse.create(rtn)
 	}
 
 	/**
@@ -436,5 +439,201 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	String[] getDiskNameList() {
 		return diskNames
+	}
+
+	protected ComputeServer saveAndGet(ComputeServer server) {
+		def saveResult = context.async.computeServer.bulkSave([server]).blockingGet()
+		def updatedServer
+		if(saveResult.success == true) {
+			updatedServer = saveResult.persistedItems.find { it.id == server.id }
+		} else {
+			updatedServer = saveResult.failedItems.find { it.id == server.id }
+			log.warn("Error saving server: ${server?.id}" )
+		}
+		return updatedServer ?: server
+	}
+
+	def getUniqueDataDiskName(ComputeServer server, index = 1) {
+		def nameExists = true
+		def volumes = server.volumes
+		def diskName
+		def diskIndex = index ?: server.volumes?.size()
+		while(nameExists) {
+			diskName = "dataDisk${diskIndex}.vhd"
+			nameExists = volumes.find{ it.externalId == diskName }
+			diskIndex++
+		}
+
+		return diskName
+	}
+
+	def buildStorageVolume(computeServer, volumeAdd, addDiskResults, newCounter) {
+		def newVolume = new StorageVolume(
+				refType			: 'ComputeZone',
+				refId			: computeServer.cloud.id,
+				regionCode		: computeServer.region?.regionCode,
+				account			: computeServer.account,
+				maxStorage		: volumeAdd.maxStorage?.toLong(),
+				maxIOPS			: volumeAdd.maxIOPS?.toInteger(),
+				internalId 		: addDiskResults.volume?.uuid, // This is used in embedded
+				deviceName		: addDiskResults.volume?.deviceName,
+				name			: volumeAdd.name,
+				displayOrder	: newCounter,
+				status			: 'provisioned',
+				unitNumber		: addDiskResults.volume?.deviceIndex?.toString(),
+				deviceDisplayName : getDiskDisplayName(newCounter)
+		)
+		return newVolume
+	}
+
+	def getDiskConfig(ComputeServer server, StorageVolume volume) {
+		def rtn = [success:true]
+		def hypervOpts = HypervOptsUtility.getAllHypervServerOpts(context, server)
+		def vmId = server.externalId
+		def diskResults = apiService.getServerDisks(hypervOpts, vmId)
+		if(diskResults?.success == true) {
+			def diskName = volume.externalId
+			def diskData = diskResults?.disks?.find{ it.path.contains("${diskName}") }
+			if(diskData){
+				rtn += diskData
+			}
+		}
+
+		return rtn
+	}
+
+	@Override
+	ServiceResponse resizeServer(ComputeServer computeServer, ResizeRequest resizeRequest, Map map) {
+		log.info("resizeServer calling resizeWorkloadAndServer")
+		return resizeWorkloadAndServer(null, null, server, resizeRequest, opts, false)
+	}
+
+	private ServiceResponse resizeWorkloadAndServer (Long instanceId, Workload workload, ComputeServer server, ResizeRequest resizeRequest, Map opts, Boolean isWorkload) {
+		log.debug("resizeWorkloadAndServer ${workload ? "workload" : "server"}.id: ${workload?.id ?: server?.id} - opts: ${opts}")
+
+		ServiceResponse rtn = ServiceResponse.success()
+		ComputeServer computeServer = context.async.computeServer.get(server.id).blockingGet()
+		try {
+			computeServer.status = 'resizing'
+			computeServer = saveAndGet(computeServer)
+
+			def requestedMemory = resizeRequest.maxMemory
+			def requestedCores = resizeRequest?.maxCores
+
+			def currentMemory
+			def currentCores
+			if (isWorkload) {
+				currentMemory = workload.maxMemory ?: workload.getConfigProperty('maxMemory')?.toLong()
+				currentCores = workload.maxCores ?: 1
+			} else {
+				currentMemory = computeServer.maxMemory ?: computeServer.getConfigProperty('maxMemory')?.toLong()
+				currentCores = server.maxCores ?: 1
+			}
+			def neededMemory = requestedMemory - currentMemory
+			def neededCores = (requestedCores ?: 1) - (currentCores ?: 1)
+
+			def vmId = server.externalId
+			def hypervOpts = HypervOptsUtility.getAllHypervServerOpts(context, computeServer)
+			def stopResults = stopServer(computeServer)
+			if (stopResults.success == true) {
+				if(neededMemory != 0 || neededCores != 0) {
+					def resizeOpts = [:]
+					if(neededMemory != 0)
+						resizeOpts.maxMemory = requestedMemory
+					if(neededCores != 0)
+						resizeOpts.maxCores = requestedCores
+					def resizeResults = apiService.updateServer(hypervOpts, vmId, resizeOpts)
+					log.debug("resize results: ${resizeResults}")
+					if(resizeResults.success == true) {
+						computeServer.plan = plan
+						computeServer.maxCores = (requestedCores ?: 1).toLong()
+						computeServer.maxMemory = requestedMemory.toLong()
+						computeServer = saveAndGet(computeServer)
+					} else {
+						rtn.error = resizeResults.error ?: 'Failed to resize server'
+					}
+				} else {
+					log.debug "Same plan.. not updating"
+				}
+
+				if (opts.volumes && !rtn.error) {
+					def newCounter = computeServer.volumes?.size()
+					resizeRequest.volumesUpdate?.each { volumeUpdate ->
+						StorageVolume existing = volumeUpdate.existingModel
+						Map updateProps = volumeUpdate.updateProps
+						if (updateProps.maxStorage > existing.maxStorage) {
+							def storageVolumeId = existing.id
+							def volumeId = existing.externalId
+							def diskSize = ComputeUtility.parseGigabytesToBytes(volumeUpdate.volume.size)
+							def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${volumeId}"
+							def resizeResults = apiService.resizeDisk(hypervOpts, diskPath, diskSize)
+							if(resizeResults.success == true) {
+								StorageVolume existingVolume = context.services.storageVolume.get(storageVolumeId)
+								existingVolume.maxStorage = diskSize
+								context.services.storageVolume.save(existingVolume)
+							} else {
+								log.error "Error in resizing volume: ${resizeResults}"
+								rtn.error = resizeResults.error ?: "Error in resizing volume"
+							}
+						}
+					}
+
+					resizeRequest.volumesAdd.each { volumeAdd ->
+						//new disk add it
+						def diskSize = ComputeUtility.parseGigabytesToBytes(volumeUpdate.volume.size)
+						def diskName = getUniqueDataDiskName(server, newCounter++)
+						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
+						def diskResults = apiService.createDisk(hypervOpts, diskPath, diskSize)
+						log.debug("create disk: ${diskResults.success}")
+						if(diskResults.success == true && diskResults.error != true) {
+							def	attachResults = apiService.attachDisk(hypervOpts, vmId, diskPath)
+							log.debug("attach: ${attachResults.success}")
+							if (attachResults.success == true && attachResults.error != true) {
+								def newVolume = buildStorageVolume(computeServer, volumeAdd, diskResults, newCounter)
+								newVolume.externalId = diskName
+								context.services.storageVolume.create([newVolume], computeServer)
+								computeServer = context.services.computeServer.get(computeServer.id)
+								newCounter++
+							} else {
+								log.error "Error in attaching volume: ${attachResults}"
+								rtn.error = "Error in attaching volume"
+							}
+						} else {
+							log.error "Error in creating the volume: ${diskResults}"
+							rtn.error = "Error in creating the volume"
+						}
+					}
+
+					resizeRequest.volumesDelete.each { volume ->
+						log.debug "Deleting volume : ${volume.externalId}"
+						def diskName = volume.externalId
+						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
+						def diskConfig = volume.config ?: getDiskConfig(server, volume)
+						def detachResults = apiService.detachDisk(hypervOpts, vmId, diskConfig.controllerType, diskConfig.controllerNumber, diskConfig.controllerLocation)
+						if(detachResults.success == true) {
+							apiService.deleteDisk(hypervOpts, diskName)
+							context.async.storageVolume.remove([volume], computeServer, true).blockingGet()
+							computeServer = context.async.computeServer.get(computeServer.id).blockingGet()
+						}
+					}
+				}
+			} else {
+				rtn.error = 'Server never stopped so resize could not be performed'
+				rtn.success = false
+			}
+
+			computeServer.status = 'provisioned'
+			computeServer = saveAndGet(computeServer)
+			rtn.success = true
+		} catch (e) {
+			log.error("Unable to resize workload: ${e.message}", e)
+			computeServer.status = 'provisioned'
+			if (!isWorkload)
+				computeServer.statusMessage = "Unable to resize server: ${e.message}"
+			computeServer = saveAndGet(computeServer)
+			rtn.success = false
+			rtn.errors << "${e}"
+		}
+		return rtn
 	}
 }
