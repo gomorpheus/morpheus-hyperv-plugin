@@ -520,16 +520,16 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	ServiceResponse resizeWorkload(Instance instance, Workload workload, ResizeRequest resizeRequest, Map opts) {
 		log.info("resizeWorkload calling resizeWorkloadAndServer")
-		return resizeWorkloadAndServer(instance, workload, null, resizeRequest, opts, false)
+		return resizeWorkloadAndServer(workload, null, resizeRequest, opts, true)
 	}
 
 	@Override
 	ServiceResponse resizeServer(ComputeServer computeServer, ResizeRequest resizeRequest, Map map) {
 		log.info("resizeServer calling resizeWorkloadAndServer")
-		return resizeWorkloadAndServer(null, null, server, resizeRequest, opts, false)
+		return resizeWorkloadAndServer(null, computeServer, resizeRequest, opts, false)
 	}
 
-	private ServiceResponse resizeWorkloadAndServer(Long instanceId, Workload workload, ComputeServer server, ResizeRequest resizeRequest, Map opts, Boolean isWorkload) {
+	private ServiceResponse resizeWorkloadAndServer(Workload workload, ComputeServer server, ResizeRequest resizeRequest, Map opts, Boolean isWorkload) {
 		log.debug("resizeWorkloadAndServer ${workload ? "workload" : "server"}.id: ${workload?.id ?: server?.id} - opts: ${opts}")
 
 		ServiceResponse rtn = ServiceResponse.success()
