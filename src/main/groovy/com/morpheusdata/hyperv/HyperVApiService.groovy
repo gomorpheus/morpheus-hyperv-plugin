@@ -1,6 +1,7 @@
 package com.morpheusdata.hyperv
 
 import com.morpheusdata.core.MorpheusContext
+import com.morpheusdata.hyperv.utils.VhdUtility
 import com.morpheusdata.model.ComputeServer
 import groovy.json.JsonOutput
 import groovy.util.logging.Slf4j
@@ -109,7 +110,7 @@ class HyperVApiService {
             fileList << [inputStream: vhdFile.inputStream, contentLength: vhdFile.getContentLength(), targetPath: "${tgtFolder}\\${tgtFilename}".toString(), tgtFilename: tgtFilename]
         }
         log.info ("Ray :: transferImage: opts.hypervisor: ${opts.hypervisor}")
-        fileList.each { fileItem ->
+        fileList.each { Map fileItem ->
             log.info ("Ray :: transferImage: fileAction: ${fileItem}")
             // TODO: need to check:
 
@@ -123,11 +124,20 @@ class HyperVApiService {
             log.info ("copyToServer arguments: fileName: ${fileItem.tgtFilename}")
             log.info ("copyToServer arguments: filePath: ${fileItem.targetPath}")
             log.info ("copyToServer arguments: contentLength: ${fileItem.contentLength}")
-            try {
-                def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.server, fileItem.tgtFilename, fileItem.targetPath, fileItem.inputStream, fileItem.contentLength)
-                //def fileResults = morpheusContext.async.fileCopy.copyToServer(opts.server, "morpheus-ubuntu-18_04_3-v1-amd64.vhd", "c:\\Morpheus\\images\\Morpheus_Ubuntu_18_04_3_v1", sourceStream, 1044605314).blockingGet()
+            //Long contentLength = fileItem.contentLength
+            Long contentLength = VhdUtility.extractVhdDiskSize(fileItem.inputStream)
+            log.info ("copyToServer vhdContentLength: contentLength: ${contentLength}")
+            if (contentLength == 0) {
+                contentLength = fileItem.contentLength
+            }
+            // check: setting content length null
+            //contentLength = null
+            //contentLength = 0l
+            log.info ("copyToServer vhdContentLength: contentLength1: ${contentLength}")
 
-                //def fileResults = morpheusContext.async.fileCopy.copyToServer(opts.server, "morpheus-ubuntu-18_04_3-v1-amd64.vhd", "c:\\Morpheus\\images\\Morpheus_Ubuntu_18_04_3_v1", sourceStream, contentLength).blockingGet()
+            try {
+                def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.server, fileItem.tgtFilename, fileItem.targetPath, fileItem.inputStream, contentLength)
+
 
                 log.info ("Ray :: transferImage: fileResults?.success: ${fileResults?.success}")
 				rtn.success = fileResults.success
@@ -392,6 +402,13 @@ class HyperVApiService {
 
                 log.info ("Ray :: cloneServer: out?.success: ${out?.success}")
                 log.info ("Ray :: cloneServer: out.data: ${out.data}")
+
+                log.info ("Ray :: cloneServer: out.output: ${out.output}")
+                log.info ("Ray :: cloneServer: out.exitCode: ${out.exitCode}")
+                log.info ("Ray :: cloneServer: out.msg: ${out.msg}")
+                log.info ("Ray :: cloneServer: out.error: ${out.error}")
+                log.info ("Ray :: cloneServer: out.results: ${out.results}")
+                log.info ("Ray :: cloneServer: out.customOptions: ${out.customOptions}")
 
                 log.debug("run server: ${out}")
                 if (out.success == true) {
