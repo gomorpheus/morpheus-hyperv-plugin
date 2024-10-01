@@ -475,12 +475,12 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				account			: computeServer.account,
 				maxStorage		: volumeAdd.maxStorage?.toLong(),
 				maxIOPS			: volumeAdd.maxIOPS?.toInteger(),
-				internalId 		: addDiskResults.volume?.uuid, // This is used in embedded
-				deviceName		: addDiskResults.volume?.deviceName,
+//				internalId 		: addDiskResults.volume?.uuid, // This is used in embedded
+//				deviceName		: addDiskResults.volume?.deviceName,
 				name			: volumeAdd.name,
 				displayOrder	: newCounter,
 				status			: 'provisioned',
-				unitNumber		: addDiskResults.volume?.deviceIndex?.toString(),
+//				unitNumber		: addDiskResults.volume?.deviceIndex?.toString(),
 				deviceDisplayName : getDiskDisplayName(newCounter)
 		)
 		return newVolume
@@ -564,7 +564,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						if (updateProps.maxStorage > existing.maxStorage) {
 							def storageVolumeId = existing.id
 							def volumeId = existing.externalId
-							def diskSize = ComputeUtility.parseGigabytesToBytes(volumeUpdate.volume.size)
+							def diskSize = ComputeUtility.parseGigabytesToBytes(updateProps.size)
 							def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${volumeId}"
 							def resizeResults = apiService.resizeDisk(hypervOpts, diskPath, diskSize)
 							if(resizeResults.success == true) {
@@ -581,7 +581,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					resizeRequest.volumesAdd.each { volumeAdd ->
 						//new disk add it
 						def diskSize = ComputeUtility.parseGigabytesToBytes(volumeUpdate.volume.size)
-						def diskName = getUniqueDataDiskName(server, newCounter++)
+						def diskName = getUniqueDataDiskName(computeServer, newCounter++)
 						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
 						def diskResults = apiService.createDisk(hypervOpts, diskPath, diskSize)
 						log.debug("create disk: ${diskResults.success}")
