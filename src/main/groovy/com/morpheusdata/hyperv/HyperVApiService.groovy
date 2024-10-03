@@ -80,79 +80,30 @@ class HyperVApiService {
         log.info ("Ray :: transferImage: imageName: ${imageName}")
         def rtn = [success: false, results: []]
         CloudFile metadataFile = (CloudFile) cloudFiles?.find { cloudFile -> cloudFile.name == 'metadata.json' }
-        log.info ("Ray :: transferImage: metadataFile?.size(): ${metadataFile?.size()}")
-        def vhdFiles = cloudFiles?.findAll { cloudFile -> cloudFile.name.indexOf(".morpkg") == -1 && (cloudFile.name.indexOf('.vhd') > -1 || cloudFile.name.indexOf('.vhdx')) }
-        log.info ("Ray :: transferImage: vhdFiles: ${vhdFiles}")
-        log.info ("Ray :: transferImage: vhdFiles?.size(): ${vhdFiles?.size()}")
-        log.info("vhdFiles: ${vhdFiles}")
+        List<CloudFile> vhdFiles = cloudFiles?.findAll { cloudFile -> cloudFile.name.indexOf(".morpkg") == -1 && (cloudFile.name.indexOf('.vhd') > -1 || cloudFile.name.indexOf('.vhdx')) && cloudFile.name.endsWith("/") == false }
         def zoneRoot = opts.zoneRoot ?: defaultRoot
-        log.info ("Ray :: transferImage: zoneRoot: ${zoneRoot}")
         def imageFolderName = formatImageFolder(imageName)
-        log.info ("Ray :: transferImage: imageFolderName: ${imageFolderName}")
-        def fileList = []
+        List<Map> fileList = []
         def tgtFolder = "${zoneRoot}\\images\\${imageFolderName}"
-        log.info ("Ray :: transferImage: tgtFolder: ${tgtFolder}")
         opts.targetImageFolder = tgtFolder
-        def cachePath = opts.cachePath
         def command = "mkdir \"${tgtFolder}\""
-        log.info ("Ray :: transferImage: command: ${command}")
         log.debug("command: ${command}")
         def dirResults = executeCommand(command, opts)
 
-        log.info ("Ray :: transferImage: dirResults: ${dirResults}")
-        log.info ("Ray :: transferImage: metadataFile: ${metadataFile}")
         if (metadataFile) {
-            fileList << [inputStream: metadataFile.inputStream, contentLength: metadataFile.contentLength, targetPath: "${tgtFolder}\\metadata.json".toString(), tgtFilename: "metadata.json"]
+            fileList << [inputStream: metadataFile.inputStream, contentLength: metadataFile.contentLength, targetPath: "${tgtFolder}\\metadata.json".toString(), copyRequestFileName: "metadata.json"]
         }
         vhdFiles.each { CloudFile vhdFile ->
-            log.info ("Ray :: transferImage: vhdFile.name: ${vhdFile.name}")
-            def tgtFilename = extractImageFileName(vhdFile.name)
-            fileList << [inputStream: vhdFile.inputStream, contentLength: vhdFile.getContentLength(), targetPath: "${tgtFolder}\\${tgtFilename}".toString(), tgtFilename: tgtFilename]
+			def imageFileName = extractImageFileName(vhdFile.name)
+            def filename = extractFileName(vhdFile.name)
+            fileList << [inputStream: vhdFile.inputStream, contentLength: vhdFile.getContentLength(), targetPath: "${tgtFolder}\\${imageFileName}".toString(), copyRequestFileName: filename]
         }
-        log.info ("Ray :: transferImage: opts.hypervisor: ${opts.hypervisor}")
         fileList.each { Map fileItem ->
-            log.info ("Ray :: transferImage: fileAction: ${fileItem}")
-            // TODO: need to check:
-
-            //def filePromise = opts.commandService.sendAction(opts.hypervisor, fileAction, [timeout: 1800000l])
-            //log.info ("Ray :: transferImage: sourceStream: ${sourceStream?.bytes?.size()}")
-            log.info ("Ray :: transferImage: contentLength: ${fileItem.contentLength}")
-            log.info ("Ray :: transferImage: opts.server?.id: ${opts.server?.id}")
-            log.info ("copyToServer arguments: server: ${opts.server}")
-            log.info ("copyToServer arguments: server_id: ${opts.server?.id}")
-            log.info ("copyToServer arguments: server_name: ${opts.server?.name}")
-            log.info ("copyToServer arguments: fileName: ${fileItem.tgtFilename}")
-            log.info ("copyToServer arguments: filePath: ${fileItem.targetPath}")
-            log.info ("copyToServer arguments: contentLength: ${fileItem.contentLength}")
-            //Long contentLength = fileItem.contentLength
-            Long contentLength = VhdUtility.extractVhdDiskSize(fileItem.inputStream)
-            log.info ("copyToServer vhdContentLength: contentLength: ${contentLength}")
-            if (contentLength == 0) {
-                contentLength = fileItem.contentLength
-            }
-            // check: setting content length null
-            //contentLength = null
-            //contentLength = 0l
-            log.info ("copyToServer vhdContentLength: contentLength1: ${contentLength}")
-
-            try {
-                def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.server, fileItem.tgtFilename, fileItem.targetPath, fileItem.inputStream, contentLength)
-
-
-                log.info ("Ray :: transferImage: fileResults?.success: ${fileResults?.success}")
-				rtn.success = fileResults.success
-            } catch(ex) {
-                log.error("Ray :: error in fileresults: ${ex}")
-            }
-
-            //copyToServer(ComputeServer server, String fileName, String filePath, InputStream sourceStream, Long contentLength);
-            //need sever from opts, fileAction.tgtFilename, fileAction.tgtUrl, getSourceStream from vhdCloudFile same as xen,
-            //def fileResults = filePromise.get(1000l * 60l * 15l)
-            //rtn.success = fileResults?.success == true
-            //rtn.success = true
+            Long contentLength = (Long) fileItem.contentLength
+			def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.server, fileItem.copyRequestFileName, fileItem.targetPath, fileItem.inputStream, contentLength, null, true)
+			rtn.success = fileResults.success
         }
 
-        log.info ("Ray :: transferImage: rtn: ${rtn}")
         return rtn
     }
 
@@ -1267,11 +1218,16 @@ class HyperVApiService {
         executeCommand(startVM, opts)
     }
 
+	def extractFileName(imageName) {
+		def rtn = imageName
+		def lastIndex = imageName?.lastIndexOf('/')
+		if (lastIndex > -1)
+			rtn = imageName.substring(lastIndex + 1)
+		return rtn
+	}
+
     def extractImageFileName(imageName) {
-        def rtn = imageName
-        def lastIndex = imageName?.lastIndexOf('/')
-        if (lastIndex > -1)
-            rtn = imageName.substring(lastIndex + 1)
+        def rtn = extractFileName(imageName)
         if (rtn.indexOf('.tar.gz') > -1)
             rtn = rtn.replaceAll('.tar.gz', '')
         if (rtn.indexOf('.gz') > -1)
