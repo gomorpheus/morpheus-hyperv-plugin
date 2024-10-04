@@ -452,7 +452,7 @@ class HyperVApiService {
         log.debug("getServerDisks command: ${command}")
         def results = executeCommand(command, opts)
         log.debug("getServerDisks: ${results}")
-        if (results.success == true && results.exitValue == 0) {
+        if (results.success == true && results.exitCode == '0') {
             def diskResults = results.data?.split("\n")
             diskResults.each { diskResult ->
                 if (diskResult.length() > 0) {
