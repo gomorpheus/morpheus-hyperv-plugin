@@ -455,9 +455,10 @@ class HyperVApiService {
                     //need to add non boot disks from the diskMap - TODO
                     //cloud init
                     if (opts.cloudConfigBytes) {
-//                        def isoAction = [inline: true, action: 'rawfile', content: opts.cloudConfigBytes.encodeAsBase64(), targetPath: "${diskFolder}\\config.iso".toString(), opts: [:]]
-//                        def isoPromise = opts.commandService.sendAction(opts.hypervisor, isoAction) // check:
-//                        def isoResults = isoPromise.get(1000l * 60l * 3l)
+                        def isoAction = [inline: true, action: 'rawfile', content: opts.cloudConfigBytes.encodeAsBase64(), targetPath: "${diskFolder}\\config.iso".toString(), opts: [:]]
+                        /*def isoPromise = opts.commandService.sendAction(opts.hypervisor, isoAction) // check:
+                        def isoResults = isoPromise.get(1000l * 60l * 3l)*/
+
                         log.info("RAZI :: opts.cloudConfigBytes: ${opts.cloudConfigBytes}")
                         log.info("RAZI :: generation: ${generation}")
                         if (generation == 2) {
@@ -617,14 +618,22 @@ class HyperVApiService {
         try {
             def command = "Get-VM -Name \"${vmId}\" | Format-List VMname, VMID, Status, Uptime, State, CpuUsage, MemoryAssigned, ComputerName"
             def results = executeCommand(command, opts)
+            log.info("RAZI :: getServerDetails >> results.success: ${results.success}")
+            log.info("RAZI :: getServerDetails >> results.exitCode: ${results.exitCode}")
+            log.info("RAZI :: getServerDetails >> results.data: ${results.data}")
             if (results.success == true && results.exitCode == '0') {
                 def vmData = parseVmDetails(results.data)
+                log.info("RAZI :: vmData: ${vmData}")
                 if (vmData.success == true) {
                     command = "Get-VMNetworkAdapter -VMName \"${vmId}\" | Format-List"
                     results = executeCommand(command, opts)
+                    log.info("RAZI :: getServerDetails >> if (vmData.success == true) >> results.success: ${results.success}")
+                    log.info("RAZI :: getServerDetails >> if (vmData.success == true)>> results.exitCode: ${results.exitCode}")
+                    log.info("RAZI :: getServerDetails >> if (vmData.success == true)>> results.data: ${results.data}")
                     if (results.success == true && results.exitCode == '0') {
                         log.debug("network data: ${results.data}")
                         def vmNetworkData = parseVmNetworkDetails(results.data)
+                        log.info("RAZI :: vmNetworkData: ${vmNetworkData}")
                         //parse it
                         rtn.server = vmData + vmNetworkData
                         rtn.success = true

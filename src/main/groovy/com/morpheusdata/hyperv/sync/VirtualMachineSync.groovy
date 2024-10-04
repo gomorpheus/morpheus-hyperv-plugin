@@ -203,7 +203,7 @@ class VirtualMachineSync {
             }.onUpdate { List<SyncTask.UpdateItem<StorageVolume, Map>> updateItems ->
                 updateMatchedStorageVolumes(updateItems, maxStorage, changes)
             }.onDelete { removeItems ->
-                removeMissingStorageVolumes(removeItems, changes)
+                removeMissingStorageVolumes(removeItems, server, changes)
             }.start()
 
             if(server instanceof ComputeServer && server.maxStorage != maxStorage) {
@@ -218,7 +218,7 @@ class VirtualMachineSync {
         return changes
     }
 
-    def removeMissingStorageVolumes(removeItems, changes) {
+    def removeMissingStorageVolumes(removeItems, server, changes) {
         removeItems?.each { currentVolume ->
             log.debug "removing volume: ${currentVolume}"
             changes = true
