@@ -3,6 +3,7 @@ package com.morpheusdata.hyperv
 import com.morpheusdata.core.AbstractProvisionProvider
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
+import com.morpheusdata.core.providers.HostProvisionProvider
 import com.morpheusdata.core.data.DataQuery
 import com.morpheusdata.core.providers.ProvisionProvider
 import com.morpheusdata.core.providers.WorkloadProvisionProvider
@@ -18,7 +19,8 @@ import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
 
 @Slf4j
-class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, ProvisionProvider.HypervisorProvisionFacet, ProvisionProvider.BlockDeviceNameFacet, WorkloadProvisionProvider.ResizeFacet {
+class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, ProvisionProvider.HypervisorProvisionFacet, HostProvisionProvider.ResizeFacet, WorkloadProvisionProvider.ResizeFacet, ProvisionProvider.BlockDeviceNameFacet {
+
 	public static final String PROVIDER_CODE = 'hyperv.provision'
 	public static final String PROVISION_PROVIDER_CODE = 'hyperv'
 	public static final diskNames = ['sda', 'sdb', 'sdc', 'sdd', 'sde', 'sdf', 'sdg', 'sdh', 'sdi', 'sdj', 'sdk', 'sdl']
@@ -368,7 +370,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			log.error("stopServer error: ${e}", e)
 			rtn.msg = e.message
 		}
-		return new ServiceResponse(rtn)
+		return ServiceResponse.create(rtn)
 	}
 
 	/**
@@ -458,14 +460,20 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	ServiceResponse resizeWorkload(Instance instance, Workload workload, ResizeRequest resizeRequest, Map opts) {
 		log.info("resizeWorkload calling resizeWorkloadAndServer")
-		return resizeWorkloadAndServer(workload, resizeRequest, opts)
+		return resizeWorkloadAndServer(workload, null, resizeRequest, opts, true)
 	}
 
-	private ServiceResponse resizeWorkloadAndServer(Workload workload, ResizeRequest resizeRequest, Map opts) {
-		log.debug("resizeWorkloadAndServer workload.id: ${workload?.id} - opts: ${opts}")
+	@Override
+	ServiceResponse resizeServer(ComputeServer computeServer, ResizeRequest resizeRequest, Map map) {
+		log.info("resizeServer calling resizeWorkloadAndServer")
+		return resizeWorkloadAndServer(null, computeServer, resizeRequest, opts, false)
+	}
+
+	private ServiceResponse resizeWorkloadAndServer(Workload workload, ComputeServer server, ResizeRequest resizeRequest, Map opts, Boolean isWorkload) {
+		log.debug("resizeWorkloadAndServer ${workload ? "workload" : "server"}.id: ${workload?.id ?: server?.id} - opts: ${opts}")
 
 		ServiceResponse rtn = ServiceResponse.success()
-		ComputeServer computeServer = getMorpheusServer(workload.server?.id)
+		ComputeServer computeServer = isWorkload ? getMorpheusServer(workload.server?.id) : getMorpheusServer(server.id)
 
 		try {
 			computeServer.status = 'resizing'
@@ -474,15 +482,21 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			def requestedMemory = resizeRequest.maxMemory
 			def requestedCores = resizeRequest?.maxCores
 
-			def currentMemory = workload.maxMemory ?: workload.getConfigProperty('maxMemory')?.toLong()
-			def currentCores = workload.maxCores ?: 1
-
+			def currentMemory
+			def currentCores
+			if (isWorkload) {
+				currentMemory = workload.maxMemory ?: workload.getConfigProperty('maxMemory')?.toLong()
+				currentCores = workload.maxCores ?: 1
+			} else {
+				currentMemory = computeServer.maxMemory ?: computeServer.getConfigProperty('maxMemory')?.toLong()
+				currentCores = server.maxCores ?: 1
+			}
 			def neededMemory = requestedMemory - currentMemory
 			def neededCores = (requestedCores ?: 1) - (currentCores ?: 1)
 
 			def vmId = computeServer.externalId
-			def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(context, workload)
-			def stopResults = stopWorkload(workload)
+			def hypervOpts = isWorkload ? HypervOptsUtility.getAllHypervWorloadOpts(context, workload) : HypervOptsUtility.getAllHypervServerOpts(context, computeServer)
+			def stopResults = isWorkload ? stopWorkload(workload) : stopServer(computeServer)
 			if (stopResults.success == true) {
 				if (neededMemory != 0 || neededCores != 0) {
 					def resizeOpts = [:]
@@ -497,11 +511,13 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						computeServer.maxCores = (requestedCores ?: 1).toLong()
 						computeServer.maxMemory = requestedMemory.toLong()
 						computeServer = saveAndGet(computeServer)
-						workload.maxCores = (requestedCores ?: 1).toLong()
-						workload.maxMemory = requestedMemory.toLong()
-						workload = context.services.workload.save(workload)
+						if (isWorkload) {
+							workload.maxCores = (requestedCores ?: 1).toLong()
+							workload.maxMemory = requestedMemory.toLong()
+							workload = context.services.workload.save(workload)
+						}
 					} else {
-						rtn.error = resizeResults.error ?: 'Failed to resize container'
+						rtn.error = resizeResults.error ?: (isWorkload ? 'Failed to resize container' : 'Failed to resize server')
 					}
 				} else {
 					log.debug "Same plan.. not updating"
@@ -518,6 +534,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 							def diskSize = ComputeUtility.parseGigabytesToBytes(updateProps.size)
 							def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${volumeId}"
 							def resizeResults = apiService.resizeDisk(hypervOpts, diskPath, diskSize)
+
 							if (resizeResults.success == true) {
 								StorageVolume existingVolume = context.services.storageVolume.get(storageVolumeId)
 								existingVolume.maxStorage = diskSize
@@ -536,6 +553,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
 						def diskResults = apiService.createDisk(hypervOpts, diskPath, diskSize)
 						log.debug("create disk: ${diskResults.success}")
+
 						if (diskResults.success == true && diskResults.error != true) {
 							def attachResults = apiService.attachDisk(hypervOpts, vmId, diskPath)
 							log.debug("attach: ${attachResults.success}")
@@ -560,7 +578,8 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						log.debug "Deleting volume : ${volume.externalId}"
 						def diskName = volume.externalId
 						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
-						def diskConfig = volume.config ?: getDiskConfig(workload, computeServer, volume)
+
+						def diskConfig = volume.config ?: getDiskConfig(workload, computeServer, volume, isWorkload)
 						def detachResults = apiService.detachDisk(hypervOpts, vmId, diskConfig.controllerType, diskConfig.controllerNumber, diskConfig.controllerLocation)
 						if (detachResults.success == true) {
 							apiService.deleteDisk(hypervOpts, diskName)
@@ -580,8 +599,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		} catch (e) {
 			log.error("Unable to resize workload: ${e.message}", e)
 			computeServer.status = 'provisioned'
-
-			computeServer.statusMessage = "Unable to resize container: ${e.message}"
+			computeServer.statusMessage = isWorkload ? "Unable to resize container: ${e.message}" : "Unable to resize server: ${e.message}"
 			computeServer = saveAndGet(computeServer)
 			rtn.success = false
 			rtn.setError("${e}")
@@ -640,18 +658,19 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		return newVolume
 	}
 
-	def getDiskConfig(Workload workload, ComputeServer server, StorageVolume volume) {
-		def rtn = [success: true]
-		def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(context, workload)
+	def getDiskConfig(Workload workload, ComputeServer server, StorageVolume volume, isWorkload) {
+		def rtn = [success:true]
+		def hypervOpts = isWorkload ? HypervOptsUtility.getAllHypervWorloadOpts(context, workload) : HypervOptsUtility.getAllHypervServerOpts(context, server)
 		def vmId = server.externalId
 		def diskResults = apiService.getServerDisks(hypervOpts, vmId)
-		if (diskResults?.success == true) {
+		if(diskResults?.success == true) {
 			def diskName = volume.externalId
-			def diskData = diskResults?.disks?.find { it.path.contains("${diskName}") }
-			if (diskData) {
+			def diskData = diskResults?.disks?.find{ it.path.contains("${diskName}") }
+			if(diskData){
 				rtn += diskData
 			}
 		}
+
 		return rtn
 	}
 }
