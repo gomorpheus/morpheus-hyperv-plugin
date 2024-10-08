@@ -179,7 +179,7 @@ class HyperVApiService {
             log.debug "deleteDisk command: ${command}"
             def out = executeCommand(command, opts)
             log.debug "deleteDisk: ${out}"
-            rtn.success = out.success && out.exitValue == 0
+            rtn.success = out.success && out.exitCode == '0'
         } catch (e) {
             log.error("deleteDisk error: ${e}", e)
         }
@@ -239,7 +239,7 @@ class HyperVApiService {
                 log.debug "updateServer: ${command}"
                 def out = executeCommand(command, opts)
                 log.debug "updateServer results: ${out}"
-                rtn.success = out.success && out.exitValue == 0
+                rtn.success = out.success && out.exitCode == '0'
             } else {
                 log.info("No updates for server: ${vmId}")
                 rtn.success = true
@@ -452,7 +452,7 @@ class HyperVApiService {
         log.debug("getServerDisks command: ${command}")
         def results = executeCommand(command, opts)
         log.debug("getServerDisks: ${results}")
-        if (results.success == true && results.exitValue == 0) {
+        if (results.success == true && results.exitCode == '0') {
             def diskResults = results.data?.split("\n")
             diskResults.each { diskResult ->
                 if (diskResult.length() > 0) {
@@ -523,12 +523,12 @@ class HyperVApiService {
         try {
             def command = "Get-VM -Name \"${vmId}\" | Format-List VMname, VMID, Status, Uptime, State, CpuUsage, MemoryAssigned, ComputerName"
             def results = executeCommand(command, opts)
-            if (results.success == true && results.exitValue == 0) {
+            if (results.success == true && results.exitCode == '0') {
                 def vmData = parseVmDetails(results.data)
                 if (vmData.success == true) {
                     command = "Get-VMNetworkAdapter -VMName \"${vmId}\" | Format-List"
                     results = executeCommand(command, opts)
-                    if (results.success == true && results.exitValue == 0) {
+                    if (results.success == true && results.exitCode == '0') {
                         log.debug("network data: ${results.data}")
                         def vmNetworkData = parseVmNetworkDetails(results.data)
                         //parse it
@@ -746,7 +746,7 @@ class HyperVApiService {
         try {
             def command = "Restore-VMSnapshot -Name \"${snapshotId}\" -VMName \"${vmId}\" -Confirm:\$false"
             def out = executeCommand(command, opts)
-            rtn.success = out.success && out.exitValue == 0
+            rtn.success = out.success && out.exitCode == '0'
             log.debug("restore server: ${out}")
         } catch (e) {
             log.error("restoreServer error: ${e}")
@@ -776,7 +776,7 @@ class HyperVApiService {
         try {
             def command = "Remove-VMSnapshot -VMName \"${vmId}\" -Name \"${snapshotId}\""
             def out = executeCommand(command, opts)
-            rtn.success = out.success && out.exitValue == 0
+            rtn.success = out.success && out.exitCode == '0'
             if (!rtn.success) {
                 if (out.errorOutput?.contains("Hyper-V was unable to find a virtual machine with")) {
                     // Don't fail if the Snapshot isn't there
@@ -797,7 +797,7 @@ class HyperVApiService {
         try {
             def command = "Get-VMSnapshot -VMName \"${vmId}\" | Format-Table"
             def out = executeCommand(command, opts)
-            rtn.success = out.success && out.exitValue == 0
+            rtn.success = out.success && out.exitCode == '0'
             log.debug("list snapshots: ${out}")
         } catch (e) {
             log.error("listSnapshots error: ${e}")
@@ -815,7 +815,7 @@ class HyperVApiService {
             def out = executeCommand(command, opts)
             command = "Export-VMSnapshot -Name \"${snapshotId}\" -VMName \"${vmId}\" -Path \"${tgtFolder}\""
             out = executeCommand(command, opts)
-            rtn.success = out.success && out.exitValue == 0
+            rtn.success = out.success && out.exitCode == '0'
             log.debug("export snapshot: ${out}")
             if (rtn.success) {
                 rtn.diskPath = "${tgtFolder}\\${vmId}\\Virtual Hard Disks"
@@ -838,7 +838,7 @@ class HyperVApiService {
             def out = executeCommand(command, opts)
             command = "Export-VM -Name \"${vmId}\" -Path \"${tgtFolder}\""
             out = executeCommand(command, opts)
-            rtn.success = out.success && out.exitValue == 0
+            rtn.success = out.success && out.exitCode == '0'
             log.debug("export vm: ${out}")
         } catch (e) {
             log.error("exportVm error: ${e}")
@@ -856,7 +856,7 @@ class HyperVApiService {
             def command = "Remove-Item -LiteralPath \"${tgtFolder}\" -Recurse -Force"
             def out = executeCommand(command, opts)
             log.debug("delete export: ${out}")
-            rtn.success = out.success && out.exitValue == 0
+            rtn.success = out.success && out.exitCode == '0'
         } catch (e) {
             log.error("deleteExport error: ${e}")
         }
@@ -885,7 +885,7 @@ class HyperVApiService {
                 def vmConfigPath = out.data?.trim()
                 command = "Import-VM -Path \"${vmConfigPath}\" -Copy -GenerateNewId -VirtualMachinePath \"${vmFolder}\" -VhdDestinationPath \"${diskFolder}\""
                 out = executeCommand(command, opts)
-                rtn.success = out.success && out.exitValue == 0
+                rtn.success = out.success && out.exitCode == '0'
                 log.debug("import vm: ${out}")
             }
         } catch (e) {
