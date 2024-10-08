@@ -658,18 +658,19 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		return newVolume
 	}
 
-	def getDiskConfig(Workload workload, ComputeServer server, StorageVolume volume) {
-		def rtn = [success: true]
-		def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(context, workload)
+	def getDiskConfig(Workload workload, ComputeServer server, StorageVolume volume, isWorkload) {
+		def rtn = [success:true]
+		def hypervOpts = isWorkload ? HypervOptsUtility.getAllHypervWorloadOpts(context, workload) : HypervOptsUtility.getAllHypervServerOpts(context, server)
 		def vmId = server.externalId
 		def diskResults = apiService.getServerDisks(hypervOpts, vmId)
-		if (diskResults?.success == true) {
+		if(diskResults?.success == true) {
 			def diskName = volume.externalId
-			def diskData = diskResults?.disks?.find { it.path.contains("${diskName}") }
-			if (diskData) {
+			def diskData = diskResults?.disks?.find{ it.path.contains("${diskName}") }
+			if(diskData){
 				rtn += diskData
 			}
 		}
+
 		return rtn
 	}
 }
