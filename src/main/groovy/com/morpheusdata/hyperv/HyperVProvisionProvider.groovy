@@ -817,7 +817,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				imageId = virtualImage.externalId
 				log.info("RAZI :: else if(imageType == 'custom' && config.template) >> imageId: ${imageId}")
 			} else {
-				virtualImage = new VirtualImage(code: 'hyperv.image.morpheus.ubuntu.16.04.3-v1.ubuntu.16.04.3.amd64')
+				virtualImage = new VirtualImage(code: 'hyperv.image.morpheus.ubuntu.18.04.3-v1.ubuntu.18.04.3.amd64')
 				log.info("RAZI :: } else { >> virtualImage: ${virtualImage}")
 			}
 			log.info("RAZI :: before if(!imageId) >> imageId: ${imageId}")
