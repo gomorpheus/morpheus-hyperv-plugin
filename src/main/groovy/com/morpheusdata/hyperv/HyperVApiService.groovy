@@ -313,6 +313,9 @@ class HyperVApiService {
                 log.info ("Ray :: cloneServer: networkName: ${networkName}")
                 def diskFolder = "${diskRoot}\\${imageFolderName}"
                 log.info ("Ray :: cloneServer: diskFolder: ${diskFolder}")
+                log.info ("Ray :: cloneServer: opts.diskMap: ${opts.diskMap}")
+                log.info ("Ray :: cloneServer: opts.diskMap?.bootDisk: ${opts.diskMap?.bootDisk}")
+                log.info ("Ray :: cloneServer: opts.diskMap?.bootDisk?.fileName: ${opts.diskMap?.bootDisk?.fileName}")
                 def bootDiskName = opts.diskMap?.bootDisk?.fileName ?: 'morpheus-ubuntu-22_04-amd64-20240604.vhd' //'ubuntu-14_04.vhd'
                 log.info ("Ray :: cloneServer: bootDiskName: ${bootDiskName}")
                 disks.osDisk = [externalId: bootDiskName]
@@ -454,12 +457,14 @@ class HyperVApiService {
 
                     //need to add non boot disks from the diskMap - TODO
                     //cloud init
+                    log.info ("Ray :: cloneServer: opts.cloudConfigBytes:")
                     if (opts.cloudConfigBytes) {
                         def isoAction = [inline: true, action: 'rawfile', content: opts.cloudConfigBytes.encodeAsBase64(), targetPath: "${diskFolder}\\config.iso".toString(), opts: [:]]
                         /*def isoPromise = opts.commandService.sendAction(opts.hypervisor, isoAction) // check:
                         def isoResults = isoPromise.get(1000l * 60l * 3l)*/
+                        //def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.server, fileItem.copyRequestFileName, fileItem.targetPath, fileItem.inputStream, contentLength, null, true)
 
-                        log.info("RAZI :: opts.cloudConfigBytes: ${opts.cloudConfigBytes}")
+                        log.info("RAZI :: opts.cloudConfigBytes")
                         log.info("RAZI :: generation: ${generation}")
                         if (generation == 2) {
                             createCdrom(opts, opts.name, "${diskFolder}\\config.iso")
@@ -593,7 +598,7 @@ class HyperVApiService {
                         rtn.server = serverDetail.server
                         pending = false
                     } else {
-                        opts.server.refresh()
+                        //opts.server.refresh()
                         log.debug("check server loading server: ip: ${opts.server.internalIp}")
                         if (opts.server.internalIp) {
                             rtn.success = true

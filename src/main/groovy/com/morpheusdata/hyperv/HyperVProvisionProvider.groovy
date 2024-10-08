@@ -674,7 +674,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				log.info ("Ray :: runWorkload: hypervOpts.secureBoot: ${hypervOpts.secureBoot}")
 				hypervOpts.imageId = imageId
 				log.info ("Ray :: runWorkload: hypervOpts.imageId: ${hypervOpts.imageId}")
-				//hypervOpts.diskMap = virtualImageService.getImageDiskMap(virtualImage) // TODO: TBU check:
 				hypervOpts.diskMap = context.services.virtualImage.getImageDiskMap(virtualImage)
 				log.info ("Ray :: runWorkload: hypervOpts111: ${hypervOpts}")
 				hypervOpts += HypervOptsUtility.getHypervWorkloadOpts(context, workload)
@@ -716,6 +715,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					//opts.createUserList = opts.userConfig.createUsers
 				} else {
 					//opts.createUserList = opts.userConfig.createUsers
+					log.info ("Ray :: runWorkload: inside cloudinit else condition")
 				}
 				//save it
 				//opts.server.save(flush:true)
@@ -757,11 +757,19 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						log.info("serverDetail: ${serverDetails}")
 						def newIpAddress = serverDetails.server?.ipAddress ?: createResults.server?.ipAddress
 						log.info ("Ray :: runWorkload: newIpAddress: ${newIpAddress}")
-						//opts.network = applyComputeServerNetworkIp(opts.server, newIpAddress, newIpAddress, null, null, 0, [:])
+						log.info ("Ray :: runWorkload: before : applyComputeServerNetworkIp")
+						opts.network = applyComputeServerNetworkIp(server, newIpAddress, newIpAddress, 0)
+						log.info ("Ray :: runWorkload: after : applyComputeServerNetworkIp")
+						log.info("Ray :: runWorkload: server.sshHost: ${server.sshHost}")
+						log.info("Ray :: runWorkload: server.internalIp: ${server.internalIp}")
+						server = getMorpheusServer(server.id)
 						server.osDevice = '/dev/sda'
 						server.dataDevice = '/dev/sda'
 						server.lvmEnabled = false
-						server.sshHost = opts.server.internalIp
+						//server.sshHost = opts.server.internalIp
+						server.sshHost = server.internalIp
+						log.info("Ray :: runWorkload: server.sshHost22: ${server.sshHost}")
+						log.info("Ray :: runWorkload: server.internalIp22: ${server.internalIp}")
 						server.managed = true
 						//opts.server.save()
 						server.capacityInfo = new ComputeCapacityInfo(
@@ -833,6 +841,74 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				null, // no errors
 				new ProvisionResponse(success:true)
 		)*/
+	}
+
+	private applyComputeServerNetworkIp(ComputeServer server, privateIp, publicIp, index) {
+		ComputeServerInterface network
+		log.info ("Ray :: applyComputeServerNetworkIp: server?.id: ${server?.id}")
+		log.info ("Ray :: applyComputeServerNetworkIp: privateIp: ${privateIp}")
+		log.info ("Ray :: applyComputeServerNetworkIp: publicIp: ${publicIp}")
+		log.info ("Ray :: applyComputeServerNetworkIp: index: ${index}")
+		if(privateIp) {
+			privateIp = privateIp?.toString().contains("\n") ? privateIp.toString().replace("\n", "") : privateIp.toString()
+			log.info ("Ray :: applyComputeServerNetworkIp: privateIp1: ${privateIp}")
+			def newInterface = false
+			server.internalIp = privateIp
+			server.sshHost = privateIp
+			log.debug("Setting private ip on server:${server.sshHost}")
+			log.info ("Ray :: applyComputeServerNetworkIp: server.interfaces?.size(): ${server.interfaces?.size()}")
+			server.interfaces?.eachWithIndex{it, index1 ->
+				log.info ("Ray :: applyComputeServerNetworkIp:interfaces: index1: ${index1}")
+				log.info ("Ray :: applyComputeServerNetworkIp:interfaces: it.name: ${it.name}")
+				log.info ("Ray :: applyComputeServerNetworkIp:interfaces: it.ipAddress: ${it.ipAddress}")
+				log.info ("Ray :: applyComputeServerNetworkIp:interfaces: it.publicIpAddress: ${it.publicIpAddress}")
+				log.info ("Ray :: applyComputeServerNetworkIp:interfaces: it.publicIpv6Address: ${it.publicIpv6Address}")
+				log.info ("Ray :: applyComputeServerNetworkIp:interfaces: it.externalId: ${it.externalId}")
+				log.info ("Ray :: applyComputeServerNetworkIp:interfaces: it.uniqueId: ${it.uniqueId}")
+			}
+			network = server.interfaces?.find{it.ipAddress == privateIp}
+			log.info ("Ray :: applyComputeServerNetworkIp: network: ${network}")
+			log.info ("Ray :: applyComputeServerNetworkIp: network?.id: ${network?.id}")
+
+			if(network == null) {
+				if(index == 0)
+					network = server.interfaces?.find{it.primaryInterface == true}
+				if(network == null)
+					network = server.interfaces?.find{it.displayOrder == index}
+				if(network == null)
+					network = server.interfaces?.size() > index ? server.interfaces[index] : null
+			}
+			log.info ("Ray :: applyComputeServerNetworkIp: network1: ${network}")
+			log.info ("Ray :: applyComputeServerNetworkIp: network?.id1: ${network?.id}")
+			if(network == null) {
+				def interfaceName = server.sourceImage?.interfaceName ?: 'eth0'
+				log.info ("Ray :: applyComputeServerNetworkIp: interfaceName: ${interfaceName}")
+				network = new ComputeServerInterface(
+							name			: interfaceName,
+							ipAddress		: privateIp,
+							primaryInterface: true,
+							displayOrder	: (server.interfaces?.size() ?: 0) + 1
+							//externalId		: networkOpts.externalId
+				)
+				network.addresses += new NetAddress(type: NetAddress.AddressType.IPV4, address: privateIp)
+				newInterface = true
+			} else {
+				network.ipAddress = privateIp
+			}
+			log.info ("Ray :: applyComputeServerNetworkIp: newInterface: ${newInterface}")
+			if(publicIp) {
+				publicIp = publicIp?.toString().contains("\n") ? publicIp.toString().replace("\n", "") : publicIp.toString()
+				network.publicIpAddress = publicIp
+				server.externalIp = publicIp
+			}
+			if(newInterface == true)
+				context.async.computeServer.computeServerInterface.create([network], server).blockingGet()
+			else
+				context.async.computeServer.computeServerInterface.save([network]).blockingGet()
+		}
+		saveAndGetMorpheusServer(server, true)
+		log.info ("Ray :: applyComputeServerNetworkIp: server saved")
+		return network
 	}
 
 	def pickHypervHypervisor(Cloud cloud) {
