@@ -15,11 +15,7 @@ import com.morpheusdata.model.provisioning.HostRequest
 import com.morpheusdata.model.provisioning.WorkloadRequest
 import com.morpheusdata.request.ImportWorkloadRequest
 import com.morpheusdata.request.ResizeRequest
-import com.morpheusdata.response.ImportWorkloadResponse
-import com.morpheusdata.response.InitializeHypervisorResponse
-import com.morpheusdata.response.PrepareWorkloadResponse
-import com.morpheusdata.response.ProvisionResponse
-import com.morpheusdata.response.ServiceResponse
+import com.morpheusdata.response.*
 import groovy.util.logging.Slf4j
 
 @Slf4j
@@ -476,100 +472,54 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	ServiceResponse<ProvisionResponse> runWorkload(Workload workload, WorkloadRequest workloadRequest, Map opts) {
 		log.debug "runWorkload: ${workload} ${workloadRequest} ${opts}"
-		log.info ("Ray :: runWorkload: workload: ${workload?.id}")
-		log.info ("Ray :: runWorkload: workloadRequest: ${workloadRequest}")
-		log.info ("Ray :: runWorkload: opts: ${opts}")
 		ProvisionResponse provisionResponse = new ProvisionResponse(success: true)
 		def server = workload.server
-		log.info ("Ray :: runWorkload: server?.id: ${server?.id}")
-		log.info ("Ray :: runWorkload: server?.name: ${server?.name}")
 		def cloud = server.cloud
-		log.info ("Ray :: runWorkload: cloud: ${cloud}")
 		def hypervOpts = [:]
 		def snapshotId
 		try {
+			def imageId
 			def containerConfig = workload.getConfigMap()
-			log.info ("Ray :: runWorkload: containerConfig: ${containerConfig}")
-			def config = server.getConfigMap()
-			log.info ("Ray :: runWorkload: config: ${config}")
-			//opts.server = container.server
-			//opts.zone = zoneService.loadFullZone(container.server.zone)
-			//opts.account = opts.server.account
-			//opts.server.externalId = opts.server.name
-			def zoneConfig = cloud.getConfigMap()
-			log.info ("Ray :: runWorkload: zoneConfig: ${zoneConfig}")
 			hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, cloud)
 			hypervOpts.name = server.name
-			log.info ("Ray :: runWorkload: hypervOpts: ${hypervOpts}")
-			def imageId
 			VirtualImage virtualImage
-			//def applianceServerUrl = applianceService.getApplianceUrl(server.zone)
-			log.info ("Ray :: runWorkload: containerConfig.hostId: ${containerConfig.hostId}")
 			def node = context.async.computeServer.get(containerConfig.hostId?.toLong()).blockingGet()
-			log.info ("Ray :: runWorkload: node: ${node}")
-			log.info ("Ray :: runWorkload: node?.id: ${node?.id}")
-			log.info ("Ray :: runWorkload: node?.name: ${node?.name}")
 			node = containerConfig.hostId ? node : pickHypervHypervisor(cloud)
-			log.info ("Ray :: runWorkload: node1: ${node}")
-			log.info ("Ray :: runWorkload: node?.id1: ${node?.id}")
-			log.info ("Ray :: runWorkload: node?.name1: ${node?.name}")
 			String generation = 'generation1'
 			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
 			hypervOpts.hypervisor = node
-			log.info ("Ray :: runWorkload: hypervOpts1: ${hypervOpts}")
-			log.info ("Ray :: runWorkload: containerConfig.imageId: ${containerConfig.imageId}")
-			log.info ("Ray :: runWorkload: containerConfig.template: ${containerConfig.template}")
-			log.info ("Ray :: runWorkload: server.sourceImage?.id: ${server.sourceImage?.id}")
-			if(containerConfig.imageId || containerConfig.template || workload.workloadType.virtualImage?.id) {
-				//def virtualImageId = (containerConfig.imageId?.toLong() ?: containerConfig.template?.toLong() ?: container.containerType.virtualImage.id)
+			if (containerConfig.imageId || containerConfig.template || workload.workloadType.virtualImage?.id) {
 				def virtualImageId = (containerConfig.imageId?.toLong() ?: containerConfig.template?.toLong() ?: server.sourceImage.id)
-				log.info ("Ray :: runWorkload: virtualImageId: ${virtualImageId}")
-				//virtualImage = VirtualImage.get(virtualImageId)
 				virtualImage = context.async.virtualImage.get(virtualImageId).blockingGet()
-				log.info ("Ray :: runWorkload: virtualImage: ${virtualImage}")
-				log.info ("Ray :: runWorkload: virtualImage?.externalId: ${virtualImage?.externalId}")
-				log.info ("Ray :: runWorkload: virtualImage?.id: ${virtualImage?.id}")
-				log.info ("Ray :: runWorkload: virtualImage?.locations?.size(): ${virtualImage?.locations?.size()}")
 				generation = virtualImage.getConfigProperty('generation')
-				log.info ("Ray :: runWorkload: generation: ${generation}")
-				//imageId = virtualImage.externalId // check: use xen or hyperv to get imageId
 				imageId = virtualImage.locations.find { it.refType == "ComputeZone" && it.refId == cloud.id }?.externalId
-				log.info ("Ray :: runWorkload: imageId: ${imageId}")
-				if(!imageId) { //If its userUploaded and still needs uploaded
+				if (!imageId) {
 					def cloudFiles = context.async.virtualImage.getVirtualImageFiles(virtualImage).blockingGet()
-					log.info ("Ray :: runWorkload: cloudFiles: ${cloudFiles}")
-					log.info ("Ray :: runWorkload: cloudFiles?.size(): ${cloudFiles?.size()}")
-					if(cloudFiles?.size() == 0) {
+					if (cloudFiles?.size() == 0) {
 						server.statusMessage = 'Failed to find cloud files'
 						provisionResponse.setError("Cloud files could not be found for ${virtualImage}")
 						provisionResponse.success = false
 					}
 					def containerImage =
 							[
-									name			: virtualImage.name ?: workload.workloadType.imageCode, // check:
-									minDisk			: 5,
-									minRam			: 512 * ComputeUtility.ONE_MEGABYTE,
-									virtualImageId	: virtualImage.id,
-									tags			: 'morpheus, ubuntu',
-									imageType		: 'vhd',
-									containerType	: 'vhd',
-									cloudFiles		: cloudFiles
+									name          : virtualImage.name ?: workload.workloadType.imageCode, // check:
+									minDisk       : 5,
+									minRam        : 512 * ComputeUtility.ONE_MEGABYTE,
+									virtualImageId: virtualImage.id,
+									tags          : 'morpheus, ubuntu',
+									imageType     : 'vhd',
+									containerType : 'vhd',
+									cloudFiles    : cloudFiles
 							]
-					log.info ("Ray :: runWorkload: containerImage: ${containerImage}")
 					hypervOpts.image = containerImage
 					hypervOpts.userId = workload.instance.createdBy?.id
 					hypervOpts.user = workload.instance.createdBy
 					hypervOpts.virtualImage = virtualImage
 					hypervOpts.zone = cloud
-					hypervOpts.server = node
-					log.info ("Ray :: runWorkload: hypervOpts.userId: ${hypervOpts.userId}")
-					//hypervOpts.applianceServerUrl = applianceServerUrl
 					log.debug "hypervOpts: ${hypervOpts}"
 					def imageResults = apiService.insertContainerImage(hypervOpts)
-					log.info ("Ray :: runWorkload: imageResults: ${imageResults}")
-					log.info ("Ray :: runWorkload: imageResults.success: ${imageResults.success}")
-					if(imageResults.success == true) {
-						log.info ("Ray :: runWorkload: imageResults.imageId: ${imageResults.imageId}")
+					log.debug("imageResults: ${imageResults}")
+					if (imageResults.success == true) {
 						imageId = imageResults.imageId
 						def locationConfig = [
 								virtualImage: virtualImage,
@@ -578,46 +528,30 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 								externalId  : virtualImage.externalId,
 								imageName   : virtualImage.name
 						]
-						log.info ("Ray :: runWorkload: locationConfig: ${locationConfig}")
-						//virtualImageService.addVirtualImageLocation(virtualImage, imageId, opts.zone.id) // check: same as imagesync
 						VirtualImageLocation location = new VirtualImageLocation(locationConfig)
-						//virtualImage.imageLocations << location
-						def saved = context.services.virtualImage.location.create(location)
-						log.info ("Ray :: runWorkload: saved: ${saved}")
-						log.info ("Ray :: runWorkload: saved?.imageLocations?name: ${saved?.virtualImage?.name}")
-
+						context.services.virtualImage.location.create(location)
 					} else {
 						provisionResponse.success = false
 					}
 				}
-				log.info ("Ray :: runWorkload: imageId1: ${imageId}")
 			}
-
-			log.info ("Ray :: runWorkload: opts.cloneContainerId11: ${opts.cloneContainerId}")
 			def cloneContainer = context.async.workload.get(opts.cloneContainerId?.toLong()).blockingGet()
-			log.info ("Ray :: runWorkload: cloneContainer?.id: ${cloneContainer?.id}")
-			if(opts.cloneContainerId && cloneContainer) {
+			if (opts.cloneContainerId && cloneContainer) {
 				def vmId = cloneContainer.server.externalId
-				log.info ("Ray :: runWorkload: vmId: ${vmId}")
-				//def snapshot = backupService.getSnapshotForBackupResult(opts.backupSetId, opts.cloneContainerId)
-				log.info ("Ray :: runWorkload: opts.backupSetId: ${opts.backupSetId}")
-				def snapshots = context.services.backup.backupResult.list(
-						new DataQuery().withFilter("backupSetId", opts.backupSetId)
-								.withFilter("containerId", opts.cloneContainerId))
-				log.info ("Ray :: runWorkload: snapshots?.size(): ${snapshots?.size()}")
+				def snapshots = context.services.backup.backupResult.list(new DataQuery()
+						.withFilter("backupSetId", opts.backupSetId)
+						.withFilter("containerId", opts.cloneContainerId))
 				def snapshot = snapshots.find { it.backupSetId == opts.backupSetId }
 				hypervOpts.snapshotId = snapshot.snapshotId
-				log.info ("Ray :: runWorkload: hypervOpts.snapshotId: ${hypervOpts.snapshotId}")
 				def exportSnapshotResults = apiService.exportSnapshot(hypervOpts, vmId, snapshot.snapshotId)
-				log.info ("Ray :: runWorkload: exportSnapshotResults: ${exportSnapshotResults}")
-				if(exportSnapshotResults.success){
+				log.debug("exportSnapshotResults: ${exportSnapshotResults}")
+				if (exportSnapshotResults.success) {
 					snapshotId = snapshot.snapshotId
 					imageId = exportSnapshotResults.diskPath
 				}
 				def cloneContainerConfig = cloneContainer.getConfigMap()
 				def networkId = cloneContainerConfig.networkId
-				log.info ("Ray :: runWorkload: networkId: ${networkId}")
-				if(networkId){
+				if (networkId) {
 					containerConfig.networkId = networkId
 					containerConfig.each {
 						it -> workload.setConfigProperty(it.key, it.value)
@@ -626,176 +560,108 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				}
 			}
 
-			log.info ("Ray :: runWorkload: imageId22: ${imageId}")
-			if(imageId) {
-				log.info ("Ray :: runWorkload: virtualImage: ${virtualImage}")
-				log.info ("Ray :: runWorkload: virtualImage.installAgent: ${virtualImage?.installAgent}")
+			log.debug("imageid: ${imageId}")
+			if (imageId) {
 				opts.installAgent = virtualImage ? virtualImage.installAgent : true
-				log.info ("Ray :: runWorkload: opts.installAgent: ${opts.installAgent}")
-				//user config
-				//def createdBy = getInstanceCreateUser(container.instance)
 				def userGroups = workload.instance.userGroups?.toList() ?: []
-				log.info ("Ray :: runWorkload: userGroups: ${userGroups}")
-				log.info ("Ray :: runWorkload: userGroups?.size(): ${userGroups?.size()}")
 				if (workload.instance.userGroup && userGroups.contains(workload.instance.userGroup) == false) {
 					userGroups << workload.instance.userGroup
 				}
-				log.info ("Ray :: runWorkload: userGroups1: ${userGroups}")
-				log.info ("Ray :: runWorkload: userGroups?.size()1: ${userGroups?.size()}")
-				//opts.userConfig = userGroupService.buildContainerUserGroups(opts.account, virtualImage, userGroups, createdBy, opts)
-				//opts.server.sshUsername = opts.userConfig.sshUsername
-				//opts.server.sshPassword = opts.userConfig.sshPassword
 				server.sourceImage = virtualImage
 				server.externalId = hypervOpts.name
 				server.parentServer = node
 				server.serverOs = server.serverOs ?: virtualImage.osType
 				String platform = (virtualImage.osType?.platform == 'windows' ? 'windows' : 'linux') ?: virtualImage.platform
 				server.osType = platform
-				log.info ("Ray :: runWorkload: platform: ${platform}")
-				//def newType = findVmNodeZoneType(opts.server.zone.zoneType, opts.server.osType)
 				def newType = this.findVmNodeServerTypeForCloud(cloud.id, server.osType, 'hyperv')
-				log.info ("Ray :: runWorkload: newType: ${newType}")
-				log.info ("Ray :: runWorkload: newType?.provisionTypeCode: ${newType?.provisionTypeCode}")
-				if(newType && server.computeServerType != newType){
+				if (newType && server.computeServerType != newType) {
 					server.computeServerType = newType
 				}
 				//opts.server.save(flush:true)
 				server = saveAndGetMorpheusServer(server, true)
 				opts.hostname = server.getExternalHostname()
-				log.info ("Ray :: runWorkload: opts.hostname: ${opts.hostname}")
 				opts.domainName = server.getExternalDomain()
-				log.info ("Ray :: runWorkload: opts.domainName: ${opts.domainName}")
 				opts.fqdn = opts.hostname
-				log.info ("Ray :: runWorkload: opts.fqdn: ${opts.fqdn}")
-				if(opts.domainName) {
+				if (opts.domainName) {
 					opts.fqdn += '.' + opts.domainName
 				}
 				hypervOpts.secureBoot = virtualImage?.uefi ?: false
-				log.info ("Ray :: runWorkload: hypervOpts.secureBoot: ${hypervOpts.secureBoot}")
 				hypervOpts.imageId = imageId
-				log.info ("Ray :: runWorkload: hypervOpts.imageId: ${hypervOpts.imageId}")
 				hypervOpts.diskMap = context.services.virtualImage.getImageDiskMap(virtualImage)
-				log.info ("Ray :: runWorkload: hypervOpts111: ${hypervOpts}")
 				hypervOpts += HypervOptsUtility.getHypervWorkloadOpts(context, workload)
-				log.info ("Ray :: runWorkload: hypervOpts222: ${hypervOpts}")
 				hypervOpts.networkConfig = opts.networkConfig
-				log.info ("Ray :: runWorkload: hypervOpts.networkConfig: ${hypervOpts.networkConfig}")
-				//def cloudConfigOpts = buildCloudConfigOpts(opts.zone, opts.server, opts.installAgent, [doPing:true, sendIp:true, apiKey:opts.server.apiKey, applianceIp:MorpheusUtils.getUrlHost(applianceServerUrl), hostname:opts.server.getExternalHostname(), applianceUrl:applianceServerUrl, hostname:container.server.getExternalHostname(), hosts:container.server.getExternalHostname(), disableCloudInit:true, timezone: containerConfig.timezone])
 				def cloudConfigOpts = context.services.provision.buildCloudConfigOptions(cloud, server, opts.installAgent, opts)
-				log.info ("Ray :: runWorkload: cloudConfigOpts: ${cloudConfigOpts}")
-				log.info ("Ray :: runWorkload: virtualImage?.isCloudInit: ${virtualImage?.isCloudInit}")
-				log.info ("Ray :: runWorkload: virtualImage.isSysprep: ${virtualImage.isSysprep}")
-				if(virtualImage?.isCloudInit) {
+				log.debug("virtualImage.isSysprep: ${virtualImage.isSysprep}")
+				if (virtualImage?.isCloudInit) {
 					opts.installAgent = opts.installAgent && (cloudConfigOpts.installAgent != true)
-					log.info ("Ray :: runWorkload: opts.installAgent333: ${opts.installAgent}")
-					//morpheusComputeService.buildCloudNetworkConfig(hypervOpts.platform, virtualImage, cloudConfigOpts, hypervOpts.networkConfig)
-					hypervOpts.cloudConfigUser = workloadRequest?.cloudConfigUser ?: null//morpheusComputeService.buildCloudUserData(hypervOpts.platform, opts.userConfig, cloudConfigOpts)
-					hypervOpts.cloudConfigMeta = workloadRequest?.cloudConfigMeta ?: null//morpheusComputeService.buildCloudMetaData(hypervOpts.platform, "morpheus-container-${container.id}", cloudConfigOpts.hostname, cloudConfigOpts)
+					hypervOpts.cloudConfigUser = workloadRequest?.cloudConfigUser ?: null
+					hypervOpts.cloudConfigMeta = workloadRequest?.cloudConfigMeta ?: null
 					hypervOpts.cloudConfigNetwork = workloadRequest?.cloudConfigNetwork ?: null
-					log.info ("Ray :: runWorkload: hypervOpts444: ${hypervOpts}")
 					def isoBuffer = context.services.provision.buildIsoOutputStream(virtualImage.isSysprep, PlatformType.valueOf(hypervOpts.platform), hypervOpts.cloudConfigMeta, hypervOpts.cloudConfigUser, hypervOpts.cloudConfigNetwork)
-					log.info ("Ray :: runWorkload: isoBuffer?.size(): ${isoBuffer?.size()}")
-					//IsoUtility.buildCloudIso(hypervOpts.platform, hypervOpts.cloudConfigMeta, hypervOpts.cloudConfigUser)
 					hypervOpts.cloudConfigBytes = isoBuffer
 					server.cloudConfigUser = hypervOpts.cloudConfigUser
 					server.cloudConfigMeta = hypervOpts.cloudConfigMeta
 				} else if (platform == 'windows') {
-					//morpheusComputeService.buildCloudNetworkConfig(platform, virtualImage, cloudConfigOpts, hypervOpts.networkConfig)
-					if(virtualImage.isSysprep) {
+					if (virtualImage.isSysprep) {
 						hypervOpts.cloudConfigUnattend = context.services.provision.buildCloudUserData(PlatformType.valueOf(platform), workloadRequest.usersConfiguration, cloudConfigOpts)
-						log.info ("Ray :: runWorkload: hypervOpts.cloudConfigUnattend: ${hypervOpts.cloudConfigUnattend}")
-						//morpheusComputeService.buildCloudUserData(platform, opts.userConfig, cloudConfigOpts)
-						//def isoBuffer = IsoUtility.buildAutoUnattendIso(hypervOpts.cloudConfigUnattend)
 						def isoBuffer = context.services.provision.buildIsoOutputStream(virtualImage.isSysprep, PlatformType.valueOf(platform), hypervOpts.cloudConfigMeta, hypervOpts.cloudConfigUnattend, hypervOpts.cloudConfigNetwork)
-						log.info ("Ray :: runWorkload: isoBuffer?.size()11: ${isoBuffer?.size()}")
 						hypervOpts.cloudConfigBytes = isoBuffer
 					}
 					opts.unattendCustomized = cloudConfigOpts.unattendCustomized
-					log.info ("Ray :: runWorkload: opts.unattendCustomized: ${opts.unattendCustomized}")
-					//opts.createUserList = opts.userConfig.createUsers
-				} else {
-					//opts.createUserList = opts.userConfig.createUsers
-					log.info ("Ray :: runWorkload: inside cloudinit else condition")
 				}
 				//save it
-				//opts.server.save(flush:true)
 				server = saveAndGetMorpheusServer(server, true)
 				//create it
-				log.debug("create server: ${hypervOpts}")
-				hypervOpts.server = node
+				hypervOpts.newServer = server
 				def createResults = apiService.cloneServer(hypervOpts)
-				log.info ("Ray :: runWorkload: createResults: ${createResults}")
-				log.info("create server results: ${createResults}")
-				log.info ("Ray :: runWorkload: createResults.server: ${createResults?.server}")
-				if(createResults.success == true && createResults.server) {
+				log.debug("createResults: ${createResults}")
+				if (createResults.success == true && createResults.server) {
 					server.externalId = createResults.server.externalId
-					log.info ("Ray :: runWorkload: createResults.server.externalId: ${createResults.server.externalId}")
 					provisionResponse.externalId = server.externalId // check: added
 					server.parentServer = node
 					def serverDisks = createResults.server.disks
-					log.info ("Ray :: runWorkload: serverDisks: ${serverDisks}")
-					if(serverDisks) {
+					if (serverDisks) {
 						def storageVolumes = server.volumes
-						log.info ("Ray :: runWorkload: storageVolumes: ${storageVolumes}")
-						log.info ("Ray :: runWorkload: storageVolumes?.size(): ${storageVolumes?.size()}")
-						def rootVolume = storageVolumes.find{ it.rootVolume == true }
-						log.info ("Ray :: runWorkload: rootVolume: ${rootVolume}")
+						def rootVolume = storageVolumes.find { it.rootVolume == true }
 						rootVolume.externalId = serverDisks.osDisk?.externalId
-						log.info ("Ray :: runWorkload: serverDisks.osDisk?.externalId: ${serverDisks.osDisk?.externalId}")
-						log.info ("Ray :: runWorkload: storageVolumes?.size(): ${storageVolumes?.size()}")
 						storageVolumes.each { storageVolume ->
-							def dataDisk = serverDisks.dataDisks.find{ it.id == storageVolume.id }
-							if(dataDisk) {
+							def dataDisk = serverDisks.dataDisks.find { it.id == storageVolume.id }
+							if (dataDisk) {
 								storageVolume.externalId = dataDisk.externalId
 							}
 						}
 					}
-					//opts.server.save(flush:true)
 					server = saveAndGetMorpheusServer(server, true)
 					def serverDetails = apiService.getServerDetails(hypervOpts, server.externalId)
-					log.info ("Ray :: runWorkload: serverDetails: ${serverDetails}")
-					if(serverDetails.success == true) {
-						log.info("serverDetail: ${serverDetails}")
+					log.debug("runWorkload: serverDetails: ${serverDetails}")
+					if (serverDetails.success == true) {
 						def newIpAddress = serverDetails.server?.ipAddress ?: createResults.server?.ipAddress
 						def macAddress = serverDetails.server?.macAddress
-						log.info ("Ray :: runWorkload: newIpAddress: ${newIpAddress}")
-						log.info ("Ray :: runWorkload: macAddress: ${macAddress}")
-						log.info ("Ray :: runWorkload: before : applyComputeServerNetworkIp")
 						opts.network = applyComputeServerNetworkIp(server, newIpAddress, newIpAddress, 0, macAddress)
-						log.info ("Ray :: runWorkload: after : applyComputeServerNetworkIp")
-						log.info("Ray :: runWorkload: server.sshHost: ${server.sshHost}")
-						log.info("Ray :: runWorkload: server.internalIp: ${server.internalIp}")
 						server = getMorpheusServer(server.id)
 						server.osDevice = '/dev/sda'
 						server.dataDevice = '/dev/sda'
 						server.lvmEnabled = false
 						//server.sshHost = opts.server.internalIp
 						server.sshHost = server.internalIp
-						log.info("Ray :: runWorkload: server.sshHost22: ${server.sshHost}")
-						log.info("Ray :: runWorkload: server.internalIp22: ${server.internalIp}")
 						server.managed = true
-						//opts.server.save()
 						server.capacityInfo = new ComputeCapacityInfo(
-								maxCores	: hypervOpts.maxCores ?: 1,
-								maxMemory	: hypervOpts.maxMemory,
-								maxStorage	: hypervOpts.maxTotalStorage)
-						//opts.server.capacityInfo.save()
+								maxCores: hypervOpts.maxCores ?: 1,
+								maxMemory: hypervOpts.maxMemory,
+								maxStorage: hypervOpts.maxTotalStorage)
 						server.status = 'provisioned'
 						server.uniqueId = serverDetails.server?.vmId
 						server.powerState = ComputeServer.PowerState.on
 						context.async.computeServer.save(server).blockingGet()
 						provisionResponse.success = true
-						log.info ("Ray :: runWorkload: provisionResponse.success: ${provisionResponse.success}")
-						//opts.server.save(flush:true)
-						//instanceService.updateInstance(container.instance)
-						//rtn.success = true
+						log.debug("provisionResponse.success: ${provisionResponse.success}")
 					} else {
 						server.statusMessage = 'Failed to run server'
 						context.async.computeServer.save(server).blockingGet()
 						provisionResponse.success = false
 					}
 				} else {
-					if(createResults.server?.externalId) {
+					if (createResults.server?.externalId) {
 						// we did create a vm though so we need to bind it to the server
 						server.externalId = createResults.server.externalId
 						//opts.server.save(flush:true)
@@ -809,144 +675,94 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				context.async.computeServer.save(server).blockingGet()
 			}
 			provisionResponse.noAgent = opts.noAgent ?: false
-			log.info ("Ray :: runWorkload: provisionResponse.noAgent: ${provisionResponse.noAgent}")
-			log.info ("Ray :: runWorkload: provisionResponse.success: ${provisionResponse.success}")
 			if (provisionResponse.success != true) {
 				return new ServiceResponse(success: false, msg: provisionResponse.message ?: 'vm config error', error: provisionResponse.message, data: provisionResponse)
 			} else {
 				return new ServiceResponse<ProvisionResponse>(success: true, data: provisionResponse)
 			}
-		} catch(e) {
+		} catch (e) {
 			log.error("initializeServer error:${e}", e)
 			provisionResponse.setError(e.message)
 			return new ServiceResponse(success: false, msg: e.message, error: e.message, data: provisionResponse)
 		} finally {
 			//if we exported a snapshot for clone/restore, clean it up
-			if(snapshotId) {
+			if (snapshotId) {
 				apiService.deleteExport(hypervOpts, snapshotId)
 			}
 		}
-		// part of code
-		/*if(provisionResponse.success == false) {
-			return new ServiceResponse(success: false, msg: provisionResponse.message ?: 'vm config error', error: provisionResponse.message, data: provisionResponse)
-		} else {
-			return new ServiceResponse<ProvisionResponse>(success: true, data: provisionResponse)
-		}*/
-		//return rtn
-
-
-
-
-		// TODO: this is where you will implement the work to create the workload in your cloud environment
-		/*return new ServiceResponse<ProvisionResponse>(
-				true,
-				null, // no message
-				null, // no errors
-				new ProvisionResponse(success:true)
-		)*/
 	}
 
 	private applyComputeServerNetworkIp(ComputeServer server, privateIp, publicIp, index, macAddress) {
-		ComputeServerInterface network
-		log.info ("Ray :: applyComputeServerNetworkIp: server?.id: ${server?.id}")
-		log.info ("Ray :: applyComputeServerNetworkIp: privateIp: ${privateIp}")
-		log.info ("Ray :: applyComputeServerNetworkIp: publicIp: ${publicIp}")
-		log.info ("Ray :: applyComputeServerNetworkIp: index: ${index}")
-		if(privateIp) {
+		ComputeServerInterface netInterface
+		if (privateIp) {
 			privateIp = privateIp?.toString().contains("\n") ? privateIp.toString().replace("\n", "") : privateIp.toString()
-			log.info ("Ray :: applyComputeServerNetworkIp: privateIp1: ${privateIp}")
 			def newInterface = false
 			server.internalIp = privateIp
 			server.sshHost = privateIp
 			server.macAddress = macAddress
 			log.debug("Setting private ip on server:${server.sshHost}")
-			log.info ("Ray :: applyComputeServerNetworkIp: server.interfaces?.size(): ${server.interfaces?.size()}")
-			server.interfaces?.eachWithIndex{it, index1 ->
-				log.info ("Ray :: applyComputeServerNetworkIp:interfaces: index1: ${index1}")
-				log.info ("Ray :: applyComputeServerNetworkIp:interfaces: it.name: ${it.name}")
-				log.info ("Ray :: applyComputeServerNetworkIp:interfaces: it.ipAddress: ${it.ipAddress}")
-				log.info ("Ray :: applyComputeServerNetworkIp:interfaces: it.publicIpAddress: ${it.publicIpAddress}")
-				log.info ("Ray :: applyComputeServerNetworkIp:interfaces: it.publicIpv6Address: ${it.publicIpv6Address}")
-				log.info ("Ray :: applyComputeServerNetworkIp:interfaces: it.externalId: ${it.externalId}")
-				log.info ("Ray :: applyComputeServerNetworkIp:interfaces: it.uniqueId: ${it.uniqueId}")
-			}
-			network = server.interfaces?.find{it.ipAddress == privateIp}
-			log.info ("Ray :: applyComputeServerNetworkIp: network: ${network}")
-			log.info ("Ray :: applyComputeServerNetworkIp: network?.id: ${network?.id}")
+			netInterface = server.interfaces?.find { it.ipAddress == privateIp }
 
-			if(network == null) {
-				if(index == 0)
-					network = server.interfaces?.find{it.primaryInterface == true}
-				if(network == null)
-					network = server.interfaces?.find{it.displayOrder == index}
-				if(network == null)
-					network = server.interfaces?.size() > index ? server.interfaces[index] : null
+			if (netInterface == null) {
+				if (index == 0)
+					netInterface = server.interfaces?.find { it.primaryInterface == true }
+				if (netInterface == null)
+					netInterface = server.interfaces?.find { it.displayOrder == index }
+				if (netInterface == null)
+					netInterface = server.interfaces?.size() > index ? server.interfaces[index] : null
 			}
-			log.info ("Ray :: applyComputeServerNetworkIp: network1: ${network}")
-			log.info ("Ray :: applyComputeServerNetworkIp: network?.id1: ${network?.id}")
-			if(network == null) {
+			if (netInterface == null) {
 				def interfaceName = server.sourceImage?.interfaceName ?: 'eth0'
-				log.info ("Ray :: applyComputeServerNetworkIp: interfaceName: ${interfaceName}")
-				network = new ComputeServerInterface(
-							name			: interfaceName,
-							ipAddress		: privateIp,
-							primaryInterface: true,
-							displayOrder	: (server.interfaces?.size() ?: 0) + 1
-							//externalId		: networkOpts.externalId
+				netInterface = new ComputeServerInterface(
+						name: interfaceName,
+						ipAddress: privateIp,
+						primaryInterface: true,
+						displayOrder: (server.interfaces?.size() ?: 0) + 1
+						//externalId		: networkOpts.externalId
 				)
-				network.addresses += new NetAddress(type: NetAddress.AddressType.IPV4, address: privateIp)
+				netInterface.addresses += new NetAddress(type: NetAddress.AddressType.IPV4, address: privateIp)
 				newInterface = true
 			} else {
-				network.ipAddress = privateIp
+				netInterface.ipAddress = privateIp
 			}
-			log.info ("Ray :: applyComputeServerNetworkIp: newInterface: ${newInterface}")
-			if(publicIp) {
+			if (publicIp) {
 				publicIp = publicIp?.toString().contains("\n") ? publicIp.toString().replace("\n", "") : publicIp.toString()
-				network.publicIpAddress = publicIp
+				netInterface.publicIpAddress = publicIp
 				server.externalIp = publicIp
 			}
-			network.macAddress = macAddress
-			if(newInterface == true)
-				context.async.computeServer.computeServerInterface.create([network], server).blockingGet()
+			netInterface.macAddress = macAddress
+			if (newInterface == true)
+				context.async.computeServer.computeServerInterface.create([netInterface], server).blockingGet()
 			else
-				context.async.computeServer.computeServerInterface.save([network]).blockingGet()
+				context.async.computeServer.computeServerInterface.save([netInterface]).blockingGet()
 		}
 		saveAndGetMorpheusServer(server, true)
-		log.info ("Ray :: applyComputeServerNetworkIp: server saved")
-		return network
+		return netInterface
 	}
 
 	def pickHypervHypervisor(Cloud cloud) {
 		def hypervisorList = context.services.computeServer.list(new DataQuery()
 				.withFilter('zone.id', cloud.id).withFilter('computeServerType.code', 'hypervHypervisor'))
-		/*ComputeServer.withCriteria {
-    eq('zone', zone)
-    computeServerType {
-        eq('code', 'hypervHypervisor')
-    }
-    maxResults(1)
-}*/
-		log.info ("Ray :: pickHypervHypervisor: hypervisorList?.size(): ${hypervisorList?.size()}")
 		return hypervisorList?.size() > 0 ? hypervisorList.first() : null
 	}
 
-	protected ComputeServer saveAndGetMorpheusServer(ComputeServer server, Boolean fullReload=false) {
+	protected ComputeServer saveAndGetMorpheusServer(ComputeServer server, Boolean fullReload = false) {
 		def saveResult = context.async.computeServer.bulkSave([server]).blockingGet()
 		def updatedServer
-		if(saveResult.success == true) {
-			if(fullReload) {
+		if (saveResult.success == true) {
+			if (fullReload) {
 				updatedServer = getMorpheusServer(server.id)
 			} else {
 				updatedServer = saveResult.persistedItems.find { it.id == server.id }
 			}
 		} else {
 			updatedServer = saveResult.failedItems.find { it.id == server.id }
-			log.warn("Error saving server: ${server?.id}" )
+			log.warn("Error saving server: ${server?.id}")
 		}
 		return updatedServer ?: server
 	}
 
-	protected  ComputeServer getMorpheusServer(Long id) {
+	protected ComputeServer getMorpheusServer(Long id) {
 		return context.services.computeServer.find(
 				new DataQuery().withFilter("id", id).withJoin("interfaces.network")
 		)

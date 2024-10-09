@@ -36,27 +36,18 @@ class HyperVApiService {
     }
 
     def insertContainerImage(opts) {
-        log.info ("Ray :: insertContainerImage: opts: ${opts}")
         def rtn = [success: false, imageExists: false]
         def zoneRoot = opts.zoneRoot ?: defaultRoot
-        log.info ("Ray :: insertContainerImage: zoneRoot: ${zoneRoot}")
         def image = opts.image
         def imageName = image.name
-        log.info ("Ray :: insertContainerImage: imageName: ${imageName}")
         def imageFolderName = formatImageFolder(imageName)
-        log.info ("Ray :: insertContainerImage: imageFolderName: ${imageFolderName}")
         def tgtFolder = "${zoneRoot}\\images\\${imageFolderName}"
-        log.info ("Ray :: insertContainerImage: tgtFolder: ${tgtFolder}")
         def match = findImage(opts, imageName)
-        log.info ("Ray :: insertContainerImage: match: ${match}")
         log.info("findImage: ${match}")
-        log.info ("Ray :: insertContainerImage: match.imageExists: ${match.imageExists}")
         if (match.imageExists == false) {
             //transfer it to host
             def transferResults = transferImage(opts, image.cloudFiles, imageName)
-            log.info ("Ray :: insertContainerImage: transferResults: ${transferResults}")
             log.debug "transferImage: ${transferResults}"
-            log.info ("Ray :: insertContainerImage: transferResults.success: ${transferResults.success}")
             if (transferResults.success == true) {
                 //clone it to vm folder
                 rtn.image = [path: tgtFolder, name: imageName]
@@ -70,14 +61,10 @@ class HyperVApiService {
             rtn.imageId = tgtFolder
             rtn.success = true
         }
-        log.info ("Ray :: insertContainerImage: rtn: ${rtn}")
         return rtn
     }
 
     def transferImage(opts, cloudFiles, imageName) {
-        log.info ("Ray :: transferImage: opts: ${opts}")
-        log.info ("Ray :: transferImage: cloudFiles: ${cloudFiles}")
-        log.info ("Ray :: transferImage: imageName: ${imageName}")
         def rtn = [success: false, results: []]
         CloudFile metadataFile = (CloudFile) cloudFiles?.find { cloudFile -> cloudFile.name == 'metadata.json' }
         List<CloudFile> vhdFiles = cloudFiles?.findAll { cloudFile -> cloudFile.name.indexOf(".morpkg") == -1 && (cloudFile.name.indexOf('.vhd') > -1 || cloudFile.name.indexOf('.vhdx')) && cloudFile.name.endsWith("/") == false }
@@ -100,43 +87,28 @@ class HyperVApiService {
         }
         fileList.each { Map fileItem ->
             Long contentLength = (Long) fileItem.contentLength
-			def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.server, fileItem.copyRequestFileName, fileItem.targetPath, fileItem.inputStream, contentLength, null, true)
+			def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.hypervisor, fileItem.copyRequestFileName, fileItem.targetPath, fileItem.inputStream, contentLength, null, true)
 			rtn.success = fileResults.success
         }
-
         return rtn
     }
 
     def cloneImage(opts, srcImage, tgtName) {
         log.info("cloneImage: ${srcImage} -> ${tgtName}")
-        log.info ("Ray :: cloneImage: opts: ${opts}")
-        log.info ("Ray :: cloneImage: srcImage: ${srcImage}")
-        log.info ("Ray :: cloneImage: tgtName: ${tgtName}")
         def rtn = [success: false]
         try {
             def diskRoot = opts.diskRoot
-            log.info ("Ray :: cloneImage: diskRoot: ${diskRoot}")
             def imageFolderName = opts.serverFolder
-            log.info ("Ray :: cloneImage: imageFolderName: ${imageFolderName}")
             def tgtFolder = "${diskRoot}\\${imageFolderName}"
             def command = "mkdir \"${tgtFolder}\""
-            log.info ("Ray :: cloneImage: command: ${command}")
             def out = executeCommand(command, opts)
-            log.info ("Ray :: cloneImage: out?.success: ${out?.success}")
-            log.info ("Ray :: cloneImage: out?.data: ${out?.data}")
             command = "xcopy \"${srcImage}\" \"${tgtFolder}\" /y /i /r /h /s"
-            log.info ("Ray :: cloneImage: command2: ${command}")
             log.debug("cloneImage command: ${command}")
             out = executeCommand(command, opts)
-            log.info ("Ray :: cloneImage: out?.success2: ${out?.success}")
-            log.info ("Ray :: cloneImage: out?.data2: ${out?.data}")
             log.info("cloneImage: ${out}")
             if (out.success == true) {
                 command = "dir \"${tgtFolder}\""
-                log.info ("Ray :: cloneImage: command3: ${command}")
                 out = executeCommand(command, opts)
-                log.info ("Ray :: cloneImage: out?.success3: ${out?.success}")
-                log.info ("Ray :: cloneImage: out?.data3: ${out?.data}")
                 rtn.targetPath = tgtFolder
                 rtn.success = out.success
             }
@@ -151,50 +123,36 @@ class HyperVApiService {
     }
 
     def findImage(opts, imageName) {
-        log.info ("Ray :: findImage: opts: ${opts}")
-        log.info ("Ray :: findImage: imageName: ${imageName}")
         def rtn = [success: false, imageExists: false]
         def zoneRoot = opts.zoneRoot ?: defaultRoot
-        log.info ("Ray :: findImage: zoneRoot: ${zoneRoot}")
         def imageFolder = formatImageFolder(imageName)
-        log.info ("Ray :: findImage: imageFolder: ${imageFolder}")
         def imageFolderPath = "${zoneRoot}\\images\\${imageFolder}"
-        log.info ("Ray :: findImage: imageFolderPath: ${imageFolderPath}")
         def command = "dir \"${imageFolderPath}\""
-        log.info ("Ray :: findImage: command: ${command}")
         log.debug("findImage command: ${command}")
         def out = executeCommand(command, opts)
-        log.info ("Ray :: findImage: out: ${out}")
-        log.info ("Ray :: findImage: out.success: ${out.success}")
-        log.info ("Ray :: findImage: out.data: ${out.data}")
         log.info("findImage: ${out.data}")
         rtn.success = out.success
-        log.info ("Ray :: findImage: out.data?.length(): ${out.data?.length()}")
         if (out.data?.length() > 0) {
             rtn.imageExists = true
             rtn.imageName = imageName
         }
-        log.info ("Ray :: findImage: rtn: ${rtn}")
         return rtn
     }
 
     def createDisk(opts, diskPath, diskSize) {
         def command = "New-VHD -Path \"${diskPath}\" -SizeBytes ${diskSize} -Dynamic"
         log.debug "createDisk command: ${command}"
-        log.info ("Ray :: createDisk: command: ${command}")
         return executeCommand(command, opts)
     }
 
     def attachDisk(opts, vmId, diskPath) {
         def command = "Add-VMHardDiskDrive -VMName \"${vmId}\" -Path \"${diskPath}\""
         log.debug "attachDisk command: ${command}"
-        log.info ("Ray :: attachDisk: command: ${command}")
         return executeCommand(command, opts)
     }
 
     def resizeDisk(opts, diskPath, diskSize) {
         def command = "Resize-VHD -Path \"${diskPath}\" -SizeBytes ${diskSize}"
-        log.info ("Ray :: resizeDisk: command: ${command}")
         log.debug "resizeDisk: ${command}"
         return executeCommand(command, opts)
     }
@@ -259,10 +217,7 @@ class HyperVApiService {
     }
 
     def updateServer(opts, vmId, updates = [:]) {
-//        log.info("updateServer: vmId: ${vmId}, updates: ${updates}")
-        log.info("RAZI :: updateServer: opts: ${opts}")
-        log.info("RAZI :: updateServer: vmId: ${vmId}")
-        log.info("RAZI :: updateServer: updates: ${updates}")
+        log.info("updateServer: vmId: ${vmId}, updates: ${updates}")
         def rtn = [success: false]
         try {
             if (updates.maxMemory || updates.maxCores || updates.notes) {
@@ -277,9 +232,6 @@ class HyperVApiService {
 
                 log.debug "updateServer: ${command}"
                 def out = executeCommand(command, opts)
-                log.info("RAZI :: updateServer : out: ${out}")
-                log.info("RAZI :: updateServer : out.success: ${out.success}")
-                log.info("RAZI :: updateServer : out.exitCode: ${out.exitCode}")
                 log.debug "updateServer results: ${out}"
                 rtn.success = out.success && out.exitCode == '0'
             } else {
@@ -293,41 +245,28 @@ class HyperVApiService {
     }
 
     def cloneServer(opts) {
-        log.info ("Ray :: cloneServer: opts: ${opts}")
         log.debug "cloneServer opts: ${opts}"
         def rtn = [success: false]
         try {
             def imageName = opts.imageId
-            log.info ("Ray :: cloneServer: imageName: ${imageName}")
             def cloneResults = cloneImage(opts, imageName, opts.serverFolder)
-            log.info ("Ray :: cloneServer: cloneResults: ${cloneResults}")
             log.info "cloneResults: ${cloneResults}"
             if (cloneResults.success == true) {
                 def disks = [osDisk: [:], dataDisks: []]
                 def diskRoot = opts.diskRoot
-                log.info ("Ray :: cloneServer: diskRoot: ${diskRoot}")
                 def vmRoot = opts.vmRoot
                 def imageFolderName = opts.serverFolder
-                log.info ("Ray :: cloneServer: imageFolderName: ${imageFolderName}")
                 def networkName = opts.network?.name
-                log.info ("Ray :: cloneServer: networkName: ${networkName}")
                 def diskFolder = "${diskRoot}\\${imageFolderName}"
-                log.info ("Ray :: cloneServer: diskFolder: ${diskFolder}")
-                log.info ("Ray :: cloneServer: opts.diskMap: ${opts.diskMap}")
-                log.info ("Ray :: cloneServer: opts.diskMap?.bootDisk: ${opts.diskMap?.bootDisk}")
-                log.info ("Ray :: cloneServer: opts.diskMap?.bootDisk?.fileName: ${opts.diskMap?.bootDisk?.fileName}")
                 def bootDiskName = opts.diskMap?.bootDisk?.fileName ?: 'morpheus-ubuntu-22_04-amd64-20240604.vhd' //'ubuntu-14_04.vhd'
-                log.info ("Ray :: cloneServer: bootDiskName: ${bootDiskName}")
                 disks.osDisk = [externalId: bootDiskName]
                 def osDiskPath = diskFolder + '\\' + bootDiskName
                 def vmFolder = "${vmRoot}\\${imageFolderName}"
                 //network config
                 def additionalNetworks = []
-                log.info ("Ray :: cloneServer: opts.networkConfig?.primaryInterface?.network?.externalId: ${opts.networkConfig?.primaryInterface?.network?.externalId}")
                 if (opts.networkConfig?.primaryInterface?.network?.externalId) { //new style multi network
                     def primaryInterface = opts.networkConfig.primaryInterface
                     networkName = primaryInterface.network.externalId
-                    log.info ("Ray :: cloneServer: networkName: ${networkName}")
                     //additional nics
                     def extraIndex = 1
                     opts.networkConfig.extraInterfaces?.each { extraInterface ->
@@ -342,15 +281,8 @@ class HyperVApiService {
                 if (osDiskPath.endsWith('.vhdx')) {
                     generation = 2
                 }
-                log.info ("Ray :: cloneServer: opts.name: ${opts.name}")
-                log.info ("Ray :: cloneServer: opts.memory: ${opts.memory}")
-                log.info ("Ray :: cloneServer: generation: ${generation}")
-                log.info ("Ray :: cloneServer: opts.osDiskPath: ${opts.osDiskPath}")
-                log.info ("Ray :: cloneServer: vmFolder: ${vmFolder}")
-                log.info ("Ray :: cloneServer: networkName: ${networkName}")
                 def launchCommand = "New-VM -Name \"${opts.name}\" -MemoryStartupBytes ${opts.memory} -Generation ${generation} -VHDPath \"${osDiskPath}\" " +
                         "-BootDevice VHD -Path \"${vmFolder}\" -SwitchName \"${networkName}\" "
-                log.info ("Ray :: cloneServer: launchCommand: ${launchCommand}")
                 //-ComputerName ${opts.name}
                 //Parameter Set: Existing VHD
                 //New-VM [[-Name] <String> ] [[-MemoryStartupBytes] <Int64> ] [[-Generation] <Int16> ] -VHDPath <String> [-AsJob]
@@ -360,75 +292,47 @@ class HyperVApiService {
                 log.info("launchCommand: ${launchCommand}")
                 def out = executeCommand(launchCommand, opts)
 
-                log.info ("Ray :: cloneServer: out?.success: ${out?.success}")
-                log.info ("Ray :: cloneServer: out.data: ${out.data}")
-
-                log.info ("Ray :: cloneServer: out.output: ${out.output}")
-                log.info ("Ray :: cloneServer: out.exitCode: ${out.exitCode}")
-                log.info ("Ray :: cloneServer: out.msg: ${out.msg}")
-                log.info ("Ray :: cloneServer: out.error: ${out.error}")
-                log.info ("Ray :: cloneServer: out.results: ${out.results}")
-                log.info ("Ray :: cloneServer: out.customOptions: ${out.customOptions}")
-
                 log.debug("run server: ${out}")
                 if (out.success == true) {
                     //we need to fix SecureBoot
                     String secureBootCommand
-                    log.info ("Ray :: cloneServer: opts.secureBoot: ${opts.secureBoot}")
-                    log.info ("Ray :: cloneServer: opts.name: ${opts.name}")
                     if (opts.secureBoot) {
                         secureBootCommand = "Set-VMFirmware \"${opts.name}\" -EnableSecureBoot On"
                     } else {
                         secureBootCommand = "Set-VMFirmware \"${opts.name}\" -EnableSecureBoot Off"
                     }
-                    log.info ("Ray :: cloneServer: secureBootCommand: ${secureBootCommand}")
 
                     executeCommand(secureBootCommand, opts)
                     //if we have to tag it to a VLAN
-                    log.info ("Ray :: cloneServer: opts.networkConfig.primaryInterface.network.vlanId: ${opts.networkConfig.primaryInterface.network.vlanId}")
                     if (opts.networkConfig.primaryInterface.network.vlanId) {
                         String setVlanCommand = "Set-VMNetworkAdapterVlan -VMName \"${opts.name}\" -Access -VlanId ${opts.networkConfig.primaryInterface.network.vlanId}"
-                        log.info ("Ray :: cloneServer: setVlanCommand: ${setVlanCommand}")
                         executeCommand(setVlanCommand, opts)
                     }
                     //add additional NICS
-                    log.info ("Ray :: cloneServer: additionalNetworks?.size(): ${additionalNetworks?.size()}")
                     if (additionalNetworks) {
                         additionalNetworks.each { additionalNetwork ->
                             def addNetworkCommand = "Add-VMNetworkAdapter -VMName \"${opts.name}\" -Name \"${additionalNetwork.name}\" -SwitchName \"${additionalNetwork.switchName}\""
-                            log.info ("Ray :: cloneServer: addNetworkCommand: ${addNetworkCommand}")
                             executeCommand(addNetworkCommand, opts)
-                            log.info ("Ray :: cloneServer: additionalNetwork?.vlanId: ${additionalNetwork?.vlanId}")
                             if (additionalNetwork.vlanId) {
                                 String setVlanCommand = "Set-VMNetworkAdapterVlan -VMName \"${opts.name}\" -VMNetworkAdapterName \"${additionalNetwork.name}\" -Access -VlanId ${additionalNetwork.vlanId}"
-                                log.info ("Ray :: cloneServer: setVlanCommand: ${setVlanCommand}")
                                 executeCommand(setVlanCommand, opts)
                             }
                         }
                     }
                     //resize disk
-                    log.info ("Ray :: cloneServer: opts.osDiskSize: ${opts.osDiskSize}")
                     if (opts.osDiskSize)
                         resizeDisk(opts, osDiskPath, opts.osDiskSize)
                     //add disk
-                    log.info ("Ray :: cloneServer: opts.dataDisks?.size(): ${opts.dataDisks?.size()}")
-                    log.info ("Ray :: cloneServer: opts.dataDiskSize: ${opts.dataDiskSize}")
                     if (opts.dataDisks?.size() > 0) {
                         opts.dataDisks?.eachWithIndex { disk, index ->
                             def diskIndex = "${index + 1}"
-                            log.info ("Ray :: cloneServer: diskIndex: ${diskIndex}")
                             def dataDisk = "dataDisk${diskIndex}.vhd"
-                            log.info ("Ray :: cloneServer: dataDisk: ${dataDisk}")
-                            log.info ("Ray :: cloneServer: generation: ${generation}")
                             if (generation == 2) {
                                 dataDisk = "dataDisk${diskIndex}.vhdx"
                             }
 
-                            log.info ("Ray :: cloneServer: dataDisk1: ${dataDisk}")
                             def newDiskPath = "${diskFolder}\\${dataDisk}"
-                            log.info ("Ray :: cloneServer: newDiskPath: ${newDiskPath}")
                             //if this is a clone/restore we have already copied the disk, otherwise need to create it
-                            log.info ("Ray :: cloneServer: opts.snapshotId): ${opts.snapshotId}")
                             if (!opts.snapshotId) {
                                 createDisk(opts, newDiskPath, disk.maxStorage)
                             }
@@ -440,7 +344,6 @@ class HyperVApiService {
                         disks << [dataDisks: []]
                         def dataDisk = "dataDisk1.vhd"
                         def newDiskPath = "${diskFolder}\\${dataDisk}"
-                        log.info ("Ray :: cloneServer: newDiskPath: ${newDiskPath}")
                         //if this is a clone/restore we have already copied the disk, otherwise need to create it
                         if (!opts.snapshotId) {
                             createDisk(opts, newDiskPath, opts.dataDiskSize)
@@ -448,35 +351,20 @@ class HyperVApiService {
                         attachDisk(opts, opts.name, newDiskPath)
                     }
                     //cpu
-                    log.info ("Ray :: cloneServer: opts.maxCores: ${opts.maxCores}")
-                    log.info ("Ray :: cloneServer: opts.maxCores: ${opts.maxCores}")
                     if (opts.maxCores && opts.maxCores > 0) {
                         updateServer(opts, opts.name, [maxCores: opts.maxCores])
                     }
                     enableDynamicMemory(opts)
 
-                    //need to add non boot disks from the diskMap - TODO
                     //cloud init
-                    log.info ("Ray :: cloneServer: opts.cloudConfigBytes:")
                     if (opts.cloudConfigBytes) {
-                        def isoAction = [inline: true, action: 'rawfile', content: opts.cloudConfigBytes.encodeAsBase64(), targetPath: "${diskFolder}\\config.iso".toString(), opts: [:]]
-                        /*def isoPromise = opts.commandService.sendAction(opts.hypervisor, isoAction) // check:
-                        def isoResults = isoPromise.get(1000l * 60l * 3l)*/
-                        log.info ("Ray :: cloneServer: opts.cloudConfigBytes.size: ${opts.cloudConfigBytes?.size()}")
-                        log.info ("Ray :: cloneServer: opts.server: ${opts.server}")
-                        log.info ("Ray :: cloneServer: fileResults: ${diskFolder}\\config.iso")
                         InputStream inputStream = new ByteArrayInputStream(opts.cloudConfigBytes)
-                        log.info ("Ray :: cloneServer: opts.server?.sshHost: ${opts.server?.sshHost}")
-                        def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.server, "config.iso", "${diskFolder}\\config.iso", inputStream, opts.cloudConfigBytes?.size(), null, true)
-                        log.info ("Ray :: cloneServer: fileResults: ${fileResults}")
-                        log.info("RAZI :: opts.cloudConfigBytes")
-                        log.info("RAZI :: generation: ${generation}")
+                        def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.hypervisor, "config.iso", "${diskFolder}\\config.iso", inputStream, opts.cloudConfigBytes?.size(), null, true)
+                        log.debug ("clone fileResults: ${fileResults}")
                         if (generation == 2) {
                             createCdrom(opts, opts.name, "${diskFolder}\\config.iso")
-                            log.info("RAZI :: createCdrom called")
                         } else {
                             setCdrom(opts, opts.name, "${diskFolder}\\config.iso")
-                            log.info("RAZI :: setCdrom called")
                         }
                     }
                     //start it
@@ -597,6 +485,7 @@ class HyperVApiService {
             while (pending) {
                 sleep(1000l * 5l)
                 def serverDetail = getServerDetails(opts, vmId)
+                log.debug("checkServerReady: serverDetail: ${serverDetail}")
                 if (serverDetail.success == true) {
                     if (serverDetail.server.ipAddress) {
                         rtn.success = true
@@ -604,11 +493,11 @@ class HyperVApiService {
                         pending = false
                     } else {
                         //opts.server.refresh()
-                        log.debug("check server loading server: ip: ${opts.server.internalIp}")
-                        if (opts.server.internalIp) {
+                        log.info("check server loading newServer: ip: ${opts.newServer.internalIp}")
+                        if (opts.newServer.internalIp) {
                             rtn.success = true
                             rtn.server = serverDetail.server
-                            rtn.server.ipAddress = opts.server.internalIp
+                            rtn.server.ipAddress = opts.newServer.internalIp
                             pending = false
                         }
                     }
@@ -628,22 +517,15 @@ class HyperVApiService {
         try {
             def command = "Get-VM -Name \"${vmId}\" | Format-List VMname, VMID, Status, Uptime, State, CpuUsage, MemoryAssigned, ComputerName"
             def results = executeCommand(command, opts)
-            log.info("RAZI :: getServerDetails >> results.success: ${results.success}")
-            log.info("RAZI :: getServerDetails >> results.exitCode: ${results.exitCode}")
-            log.info("RAZI :: getServerDetails >> results.data: ${results.data}")
             if (results.success == true && results.exitCode == '0') {
                 def vmData = parseVmDetails(results.data)
-                log.info("RAZI :: vmData: ${vmData}")
                 if (vmData.success == true) {
                     command = "Get-VMNetworkAdapter -VMName \"${vmId}\" | Format-List"
                     results = executeCommand(command, opts)
-                    log.info("RAZI :: getServerDetails >> if (vmData.success == true) >> results.success: ${results.success}")
-                    log.info("RAZI :: getServerDetails >> if (vmData.success == true)>> results.exitCode: ${results.exitCode}")
-                    log.info("RAZI :: getServerDetails >> if (vmData.success == true)>> results.data: ${results.data}")
                     if (results.success == true && results.exitCode == '0') {
                         log.debug("network data: ${results.data}")
                         def vmNetworkData = parseVmNetworkDetails(results.data)
-                        log.info("RAZI :: vmNetworkData: ${vmNetworkData}")
+
                         //parse it
                         rtn.server = vmData + vmNetworkData
                         rtn.success = true
