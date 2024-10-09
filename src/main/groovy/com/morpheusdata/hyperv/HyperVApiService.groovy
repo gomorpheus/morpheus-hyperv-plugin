@@ -1,11 +1,9 @@
 package com.morpheusdata.hyperv
 
+import com.bertramlabs.plugins.karman.CloudFile
 import com.morpheusdata.core.MorpheusContext
-import com.morpheusdata.hyperv.utils.VhdUtility
-import com.morpheusdata.model.ComputeServer
 import groovy.json.JsonOutput
 import groovy.util.logging.Slf4j
-import com.bertramlabs.plugins.karman.CloudFile
 
 /**
  * @author rahul.ray

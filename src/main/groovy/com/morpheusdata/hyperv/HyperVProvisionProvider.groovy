@@ -502,7 +502,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					}
 					def containerImage =
 							[
-									name          : virtualImage.name ?: workload.workloadType.imageCode, // check:
+									name          : virtualImage.name ?: workload.workloadType.imageCode,
 									minDisk       : 5,
 									minRam        : 512 * ComputeUtility.ONE_MEGABYTE,
 									virtualImageId: virtualImage.id,
@@ -617,7 +617,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				log.debug("createResults: ${createResults}")
 				if (createResults.success == true && createResults.server) {
 					server.externalId = createResults.server.externalId
-					provisionResponse.externalId = server.externalId // check: added
+					provisionResponse.externalId = server.externalId
 					server.parentServer = node
 					def serverDisks = createResults.server.disks
 					if (serverDisks) {
