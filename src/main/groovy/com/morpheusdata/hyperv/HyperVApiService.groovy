@@ -462,8 +462,13 @@ class HyperVApiService {
                         def isoAction = [inline: true, action: 'rawfile', content: opts.cloudConfigBytes.encodeAsBase64(), targetPath: "${diskFolder}\\config.iso".toString(), opts: [:]]
                         /*def isoPromise = opts.commandService.sendAction(opts.hypervisor, isoAction) // check:
                         def isoResults = isoPromise.get(1000l * 60l * 3l)*/
-                        //def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.server, fileItem.copyRequestFileName, fileItem.targetPath, fileItem.inputStream, contentLength, null, true)
-
+                        log.info ("Ray :: cloneServer: opts.cloudConfigBytes.size: ${opts.cloudConfigBytes?.size()}")
+                        log.info ("Ray :: cloneServer: opts.server: ${opts.server}")
+                        log.info ("Ray :: cloneServer: fileResults: ${diskFolder}\\config.iso")
+                        InputStream inputStream = new ByteArrayInputStream(opts.cloudConfigBytes)
+                        log.info ("Ray :: cloneServer: opts.server?.sshHost: ${opts.server?.sshHost}")
+                        def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.server, "config.iso", "${diskFolder}\\config.iso", inputStream, opts.cloudConfigBytes?.size(), null, true)
+                        log.info ("Ray :: cloneServer: fileResults: ${fileResults}")
                         log.info("RAZI :: opts.cloudConfigBytes")
                         log.info("RAZI :: generation: ${generation}")
                         if (generation == 2) {

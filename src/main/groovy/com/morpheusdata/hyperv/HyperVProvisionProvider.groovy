@@ -722,6 +722,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				server = saveAndGetMorpheusServer(server, true)
 				//create it
 				log.debug("create server: ${hypervOpts}")
+				hypervOpts.server = node
 				def createResults = apiService.cloneServer(hypervOpts)
 				log.info ("Ray :: runWorkload: createResults: ${createResults}")
 				log.info("create server results: ${createResults}")
@@ -756,9 +757,11 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					if(serverDetails.success == true) {
 						log.info("serverDetail: ${serverDetails}")
 						def newIpAddress = serverDetails.server?.ipAddress ?: createResults.server?.ipAddress
+						def macAddress = serverDetails.server?.macAddress
 						log.info ("Ray :: runWorkload: newIpAddress: ${newIpAddress}")
+						log.info ("Ray :: runWorkload: macAddress: ${macAddress}")
 						log.info ("Ray :: runWorkload: before : applyComputeServerNetworkIp")
-						opts.network = applyComputeServerNetworkIp(server, newIpAddress, newIpAddress, 0)
+						opts.network = applyComputeServerNetworkIp(server, newIpAddress, newIpAddress, 0, macAddress)
 						log.info ("Ray :: runWorkload: after : applyComputeServerNetworkIp")
 						log.info("Ray :: runWorkload: server.sshHost: ${server.sshHost}")
 						log.info("Ray :: runWorkload: server.internalIp: ${server.internalIp}")
@@ -843,7 +846,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		)*/
 	}
 
-	private applyComputeServerNetworkIp(ComputeServer server, privateIp, publicIp, index) {
+	private applyComputeServerNetworkIp(ComputeServer server, privateIp, publicIp, index, macAddress) {
 		ComputeServerInterface network
 		log.info ("Ray :: applyComputeServerNetworkIp: server?.id: ${server?.id}")
 		log.info ("Ray :: applyComputeServerNetworkIp: privateIp: ${privateIp}")
@@ -855,6 +858,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			def newInterface = false
 			server.internalIp = privateIp
 			server.sshHost = privateIp
+			server.macAddress = macAddress
 			log.debug("Setting private ip on server:${server.sshHost}")
 			log.info ("Ray :: applyComputeServerNetworkIp: server.interfaces?.size(): ${server.interfaces?.size()}")
 			server.interfaces?.eachWithIndex{it, index1 ->
@@ -901,6 +905,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				network.publicIpAddress = publicIp
 				server.externalIp = publicIp
 			}
+			network.macAddress = macAddress
 			if(newInterface == true)
 				context.async.computeServer.computeServerInterface.create([network], server).blockingGet()
 			else
