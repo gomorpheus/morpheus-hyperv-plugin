@@ -17,10 +17,15 @@ import com.morpheusdata.request.ImportWorkloadRequest
 import com.morpheusdata.request.ResizeRequest
 import com.morpheusdata.response.*
 import groovy.util.logging.Slf4j
+import com.morpheusdata.request.ResizeRequest
+import com.morpheusdata.response.InitializeHypervisorResponse
+import com.morpheusdata.response.PrepareWorkloadResponse
+import com.morpheusdata.response.ProvisionResponse
+import com.morpheusdata.response.ServiceResponse
+import groovy.util.logging.Slf4j
 
 @Slf4j
-class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, HostProvisionProvider, ProvisionProvider.BlockDeviceNameFacet, WorkloadProvisionProvider.ResizeFacet, HostProvisionProvider.ResizeFacet, WorkloadProvisionProvider.ImportWorkloadFacet, ProvisionProvider.HypervisorProvisionFacet {
-
+class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, ProvisionProvider.HypervisorProvisionFacet, ProvisionProvider.BlockDeviceNameFacet, WorkloadProvisionProvider.ResizeFacet {
 	public static final String PROVIDER_CODE = 'hyperv.provision'
 	public static final String PROVISION_TYPE_CODE = 'hyperv'
 	public static final diskNames = ['sda', 'sdb', 'sdc', 'sdd', 'sde', 'sdf', 'sdg', 'sdh', 'sdi', 'sdj', 'sdk', 'sdl']
@@ -762,12 +767,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		return updatedServer ?: server
 	}
 
-	protected ComputeServer getMorpheusServer(Long id) {
-		return context.services.computeServer.find(
-				new DataQuery().withFilter("id", id).withJoin("interfaces.network")
-		)
-	}
-
 	/**
 	 * This method is called after successful completion of runWorkload and provides an opportunity to perform some final
 	 * actions during the provisioning process. For example, ejected CDs, cleanup actions, etc
@@ -853,7 +852,33 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	ServiceResponse removeWorkload(Workload workload, Map opts) {
-		return ServiceResponse.success()
+		log.debug("removeWorkload: opts: ${opts}")
+		ServiceResponse response = ServiceResponse.prepare()
+		try {
+			log.debug("Removing container: ${workload?.dump()}")
+			if (workload.server?.externalId) {
+				def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(context, workload)
+				def stopResults = apiService.stopServer(hypervOpts + [turnOff: true], hypervOpts.name)
+				if (stopResults.success == true) {
+					def removeResults = apiService.removeServer(hypervOpts, hypervOpts.name)
+					if (removeResults.success == true) {
+						def deleteResults = apiService.deleteServer(hypervOpts)
+						log.debug "deleteResults: ${deleteResults?.dump()}"
+						if (deleteResults.success == true) {
+							response.success = true
+						} else {
+							response.msg = 'Failed to remove vm'
+						}
+					}
+				}
+			} else {
+				response.msg = 'vm not found'
+			}
+		} catch (e) {
+			log.error("removeWorkload error: ${e}", e)
+			response.error = e.message
+		}
+		return response
 	}
 
 	/**
@@ -1055,25 +1080,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		return null
 	}
 
-	/**
-	 * Request to scale the size of the Workload. Most likely, the implementation will follow that of resizeServer
-	 * as the Workload usually references a ComputeServer. It is up to implementations to create the volumes, set the memory, etc
-	 * on the underlying ComputeServer in the cloud environment. In addition, implementations of this method should
-	 * add, remove, and update the StorageVolumes, StorageControllers, ComputeServerInterface in the cloud environment with the requested attributes
-	 * and then save these attributes on the models in Morpheus. This requires adding, removing, and saving the various
-	 * models to the ComputeServer using the appropriate contexts. The ServicePlan, memory, cores, coresPerSocket, maxStorage values
-	 * defined on ResizeRequest will be set on the Workload and ComputeServer upon return of a successful ServiceResponse
-	 * @param instance to resize
-	 * @param workload to resize
-	 * @param resizeRequest the resize requested parameters
-	 * @param opts additional options
-	 * @return Response from API
-	 */
-	@Override
-	ServiceResponse resizeWorkload(Instance instance, Workload workload, ResizeRequest resizeRequest, Map opts) {
-		return null
-	}
-
 	@Override
 	Boolean hasNetworks() {
 		return true
@@ -1152,5 +1158,219 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	String[] getDiskNameList() {
 		return diskNames
+	}
+
+	/**
+	 * Request to scale the size of the Workload. Most likely, the implementation will follow that of resizeServer
+	 * as the Workload usually references a ComputeServer. It is up to implementations to create the volumes, set the memory, etc
+	 * on the underlying ComputeServer in the cloud environment. In addition, implementations of this method should
+	 * add, remove, and update the StorageVolumes, StorageControllers, ComputeServerInterface in the cloud environment with the requested attributes
+	 * and then save these attributes on the models in Morpheus. This requires adding, removing, and saving the various
+	 * models to the ComputeServer using the appropriate contexts. The ServicePlan, memory, cores, coresPerSocket, maxStorage values
+	 * defined on ResizeRequest will be set on the Workload and ComputeServer upon return of a successful ServiceResponse
+	 * @param instance to resize
+	 * @param workload to resize
+	 * @param resizeRequest the resize requested parameters
+	 * @param opts additional options
+	 * @return Response from API
+	 */
+	@Override
+	ServiceResponse resizeWorkload(Instance instance, Workload workload, ResizeRequest resizeRequest, Map opts) {
+		log.info("resizeWorkload calling resizeWorkloadAndServer")
+		return resizeWorkloadAndServer(workload, resizeRequest, opts)
+	}
+
+	private ServiceResponse resizeWorkloadAndServer(Workload workload, ResizeRequest resizeRequest, Map opts) {
+		log.debug("resizeWorkloadAndServer workload.id: ${workload?.id} - opts: ${opts}")
+
+		ServiceResponse rtn = ServiceResponse.success()
+		ComputeServer computeServer = getMorpheusServer(workload.server?.id)
+
+		try {
+			computeServer.status = 'resizing'
+			computeServer = saveAndGet(computeServer)
+
+			def requestedMemory = resizeRequest.maxMemory
+			def requestedCores = resizeRequest?.maxCores
+
+			def currentMemory = workload.maxMemory ?: workload.getConfigProperty('maxMemory')?.toLong()
+			def currentCores = workload.maxCores ?: 1
+
+			def neededMemory = requestedMemory - currentMemory
+			def neededCores = (requestedCores ?: 1) - (currentCores ?: 1)
+
+			def vmId = computeServer.externalId
+			def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(context, workload)
+			def stopResults = stopWorkload(workload)
+			if (stopResults.success == true) {
+				if (neededMemory != 0 || neededCores != 0) {
+					def resizeOpts = [:]
+					if (neededMemory != 0)
+						resizeOpts.maxMemory = requestedMemory
+					if (neededCores != 0)
+						resizeOpts.maxCores = requestedCores
+					def resizeResults = apiService.updateServer(hypervOpts, vmId, resizeOpts)
+					log.debug("resize results: ${resizeResults}")
+					if (resizeResults.success == true) {
+						//computeServer.plan = plan
+						computeServer.maxCores = (requestedCores ?: 1).toLong()
+						computeServer.maxMemory = requestedMemory.toLong()
+						computeServer = saveAndGet(computeServer)
+						workload.maxCores = (requestedCores ?: 1).toLong()
+						workload.maxMemory = requestedMemory.toLong()
+						workload = context.services.workload.save(workload)
+					} else {
+						rtn.error = resizeResults.error ?: 'Failed to resize container'
+					}
+				} else {
+					log.debug "Same plan.. not updating"
+				}
+
+				if (opts.volumes && !rtn.error) {
+					def newCounter = computeServer.volumes?.size()
+					resizeRequest.volumesUpdate?.each { volumeUpdate ->
+						StorageVolume existing = volumeUpdate.existingModel
+						Map updateProps = volumeUpdate.updateProps
+						if (updateProps.maxStorage > existing.maxStorage) {
+							def storageVolumeId = existing.id
+							def volumeId = existing.externalId
+							def diskSize = ComputeUtility.parseGigabytesToBytes(updateProps.size)
+							def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${volumeId}"
+							def resizeResults = apiService.resizeDisk(hypervOpts, diskPath, diskSize)
+							if (resizeResults.success == true) {
+								StorageVolume existingVolume = context.services.storageVolume.get(storageVolumeId)
+								existingVolume.maxStorage = diskSize
+								context.services.storageVolume.save(existingVolume)
+							} else {
+								log.error "Error in resizing volume: ${resizeResults}"
+								rtn.error = resizeResults.error ?: "Error in resizing volume"
+							}
+						}
+					}
+
+					resizeRequest.volumesAdd.each { volumeAdd ->
+						//new disk add it
+						def diskSize = ComputeUtility.parseGigabytesToBytes(volumeAdd.size)
+						def diskName = getUniqueDataDiskName(computeServer, newCounter++)
+						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
+						def diskResults = apiService.createDisk(hypervOpts, diskPath, diskSize)
+						log.debug("create disk: ${diskResults.success}")
+						if (diskResults.success == true && diskResults.error != true) {
+							def attachResults = apiService.attachDisk(hypervOpts, vmId, diskPath)
+							log.debug("attach: ${attachResults.success}")
+							if (attachResults.success == true && attachResults.error != true) {
+								def newVolume = buildStorageVolume(computeServer, volumeAdd, diskResults, newCounter)
+								newVolume.maxStorage = volumeAdd.size.toInteger() * ComputeUtility.ONE_GIGABYTE
+								newVolume.externalId = diskName
+								context.async.storageVolume.create([newVolume], computeServer).blockingGet()
+								computeServer = getMorpheusServer(computeServer.id)
+								newCounter++
+							} else {
+								log.error "Error in attaching volume: ${attachResults}"
+								rtn.error = "Error in attaching volume"
+							}
+						} else {
+							log.error "Error in creating the volume: ${diskResults}"
+							rtn.error = "Error in creating the volume"
+						}
+					}
+
+					resizeRequest.volumesDelete.each { volume ->
+						log.debug "Deleting volume : ${volume.externalId}"
+						def diskName = volume.externalId
+						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
+						def diskConfig = volume.config ?: getDiskConfig(workload, computeServer, volume)
+						def detachResults = apiService.detachDisk(hypervOpts, vmId, diskConfig.controllerType, diskConfig.controllerNumber, diskConfig.controllerLocation)
+						if (detachResults.success == true) {
+							apiService.deleteDisk(hypervOpts, diskName)
+							context.async.storageVolume.remove([volume], computeServer, true).blockingGet()
+							computeServer = getMorpheusServer(computeServer.id)
+						}
+					}
+				}
+			} else {
+				rtn.error = 'Server never stopped so resize could not be performed'
+				rtn.success = false
+			}
+
+			computeServer.status = 'provisioned'
+			computeServer = saveAndGet(computeServer)
+			rtn.success = true
+		} catch (e) {
+			log.error("Unable to resize workload: ${e.message}", e)
+			computeServer.status = 'provisioned'
+
+			computeServer.statusMessage = "Unable to resize container: ${e.message}"
+			computeServer = saveAndGet(computeServer)
+			rtn.success = false
+			rtn.setError("${e}")
+		}
+		return rtn
+	}
+
+	protected ComputeServer getMorpheusServer(Long id) {
+		return context.services.computeServer.find(
+				new DataQuery().withFilter("id", id).withJoin("interfaces.network")
+		)
+	}
+
+	protected ComputeServer saveAndGet(ComputeServer server) {
+		def saveResult = context.async.computeServer.bulkSave([server]).blockingGet()
+		def updatedServer
+		if (saveResult.success == true) {
+			updatedServer = saveResult.persistedItems.find { it.id == server.id }
+		} else {
+			updatedServer = saveResult.failedItems.find { it.id == server.id }
+			log.warn("Error saving server: ${server?.id}")
+		}
+		return updatedServer ?: server
+	}
+
+	def getUniqueDataDiskName(ComputeServer server, index = 1) {
+		def nameExists = true
+		def volumes = server.volumes
+		def diskName
+		def diskIndex = index ?: server.volumes?.size()
+		while (nameExists) {
+			diskName = "dataDisk${diskIndex}.vhd"
+			nameExists = volumes.find { it.externalId == diskName }
+			diskIndex++
+		}
+
+		return diskName
+	}
+
+	def buildStorageVolume(computeServer, volumeAdd, addDiskResults, newCounter) {
+		def newVolume = new StorageVolume(
+				refType: 'ComputeZone',
+				refId: computeServer.cloud.id,
+				regionCode: computeServer.region?.regionCode,
+				account: computeServer.account,
+				maxStorage: volumeAdd.maxStorage?.toLong(),
+				maxIOPS: volumeAdd.maxIOPS?.toInteger(),
+				//internalId 		: addDiskResults.volume?.uuid,
+				//deviceName		: addDiskResults.volume?.deviceName,
+				name: volumeAdd.name,
+				displayOrder: newCounter,
+				status: 'provisioned',
+				//unitNumber		: addDiskResults.volume?.deviceIndex?.toString(),
+				deviceDisplayName: getDiskDisplayName(newCounter)
+		)
+		return newVolume
+	}
+
+	def getDiskConfig(Workload workload, ComputeServer server, StorageVolume volume) {
+		def rtn = [success: true]
+		def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(context, workload)
+		def vmId = server.externalId
+		def diskResults = apiService.getServerDisks(hypervOpts, vmId)
+		if (diskResults?.success == true) {
+			def diskName = volume.externalId
+			def diskData = diskResults?.disks?.find { it.path.contains("${diskName}") }
+			if (diskData) {
+				rtn += diskData
+			}
+		}
+		return rtn
 	}
 }

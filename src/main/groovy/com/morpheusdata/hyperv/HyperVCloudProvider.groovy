@@ -704,7 +704,26 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	ServiceResponse deleteServer(ComputeServer computeServer) {
-		return ServiceResponse.success()
+		log.debug("deleteServer: ${computeServer}")
+		def rtn = [success: false]
+		try {
+			def hypervOpts = HypervOptsUtility.getAllHypervServerOpts(context, computeServer)
+			def stopResults = apiService.stopServer(hypervOpts + [turnOff: true], hypervOpts.name)
+			if(stopResults.success == true) {
+				def removeResults = apiService.removeServer(hypervOpts, hypervOpts.name)
+				if(removeResults.success == true) {
+					def deleteResults = apiService.deleteServer(hypervOpts)
+					if(deleteResults.success == true) {
+						rtn.success = true
+					}
+				}
+			}
+		} catch (e) {
+			log.error("deleteServer error: ${e}", e)
+			rtn.msg = e.message
+		}
+		return ServiceResponse.create(rtn)
+
 	}
 
 	/**

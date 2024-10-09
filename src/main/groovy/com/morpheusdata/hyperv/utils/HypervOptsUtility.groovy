@@ -64,9 +64,6 @@ class HypervOptsUtility {
         def platform = (container.server.serverOs?.platform == 'windows' || container.server.osType == 'windows') ? 'windows' : 'linux'
         return [config:serverConfig, vmId: container.server.externalId, name: container.server.externalId, server:container.server, memory:maxMemory,
                 maxCpu:maxCpu, maxCores:maxCores, serverFolder:serverFolder, hostname:container.server.getExternalHostname(), network:network, platform:platform]
-                /*maxCpu:maxCpu, maxCores:maxCores, serverFolder:serverFolder, hostname:container.getExternalHostname(), network:network, platform:platform]*/
-//                osDiskSize:maxStorage, dataDisks:dataDisks, maxTotalStorage:maxTotalStorage]
-        // check: hostname:container.getExternalHostname(), commandService
     }
 
     static getHypervZoneOpts(MorpheusContext context, zone) {
