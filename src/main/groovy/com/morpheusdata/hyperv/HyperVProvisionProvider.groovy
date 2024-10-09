@@ -1,22 +1,16 @@
 package com.morpheusdata.hyperv
 
-import com.morpheusdata.PrepareHostResponse
+
 import com.morpheusdata.core.AbstractProvisionProvider
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.data.DataQuery
-import com.morpheusdata.core.providers.HostProvisionProvider
 import com.morpheusdata.core.providers.ProvisionProvider
 import com.morpheusdata.core.providers.WorkloadProvisionProvider
 import com.morpheusdata.core.util.ComputeUtility
 import com.morpheusdata.hyperv.utils.HypervOptsUtility
 import com.morpheusdata.model.*
-import com.morpheusdata.model.provisioning.HostRequest
 import com.morpheusdata.model.provisioning.WorkloadRequest
-import com.morpheusdata.request.ImportWorkloadRequest
-import com.morpheusdata.request.ResizeRequest
-import com.morpheusdata.response.*
-import groovy.util.logging.Slf4j
 import com.morpheusdata.request.ResizeRequest
 import com.morpheusdata.response.InitializeHypervisorResponse
 import com.morpheusdata.response.PrepareWorkloadResponse
@@ -992,92 +986,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	String getName() {
 		return 'Hyper-V Provisioning'
-	}
-
-/**
- * Validate the provided provisioning options for a Docker host server.  A return of success = false will halt the
- * creation and display errors
- * @param server the ComputeServer to validate
- * @param opts options
- * @return Response from API
- */
-
-	@Override
-	ServiceResponse validateHost(ComputeServer server, Map opts) {
-		return null
-	}
-
-	/**
-	 * This method is called before runHost and provides an opportunity to perform action or obtain configuration
-	 * that will be needed in runHost. At the end of this method, if deploying a ComputeServer with a VirtualImage,
-	 * the sourceImage on ComputeServer should be determined and saved.
-	 * @param server the ComputeServer object we intend to provision along with some of the associated data needed to determine
-	 *                 how best to provision the server
-	 * @param hostRequest the HostRequest object containing the various configurations that may be needed
-	 *                        in running the server. This will be passed along into runHost
-	 * @param opts additional configuration options that may have been passed during provisioning
-	 * @return Response from API
-	 */
-	@Override
-	ServiceResponse<PrepareHostResponse> prepareHost(ComputeServer server, HostRequest hostRequest, Map opts) {
-		return null
-	}
-
-	/**
-	 * This method is called to provision a Host (i.e. Docker host).
-	 * Information associated with the passed ComputeServer object is used to kick off the provision request. Implementations
-	 * of this method should populate ProvisionResponse as complete as possible and as quickly as possible. Implementations
-	 * may choose to save the externalId on the ComputeServer or pass it back in ProvisionResponse.
-	 * @param server the ComputeServer object we intend to provision along with some of the associated data needed to determine
-	 *                 how best to provision the server
-	 * @param hostRequest the HostRequest object containing the various configurations that may be needed
-	 *                         in running the server.
-	 * @param opts additional configuration options that may have been passed during provisioning
-	 * @return Response from API
-	 */
-	@Override
-	ServiceResponse<ProvisionResponse> runHost(ComputeServer server, HostRequest hostRequest, Map opts) {
-		return null
-	}
-
-	/**
-	 * This method is called after successful completion of runHost and successful completion of waitForHost and provides
-	 * an opportunity to perform some final actions during the provisioning process.
-	 * For example, ejected CDs, cleanup actions, etc
-	 * @param server the ComputeServer object that has been provisioned
-	 * @return Response from the API
-	 */
-	@Override
-	ServiceResponse finalizeHost(ComputeServer server) {
-		return null
-	}
-
-	/**
-	 * Request to scale the size of the ComputeServer. It is up to implementations to create the volumes, set the memory, etc
-	 * on the underlying ComputeServer in the cloud environment. In addition, implementations of this method should
-	 * add, remove, and update the StorageVolumes, StorageControllers, ComputeServerInterface in the cloud environment with the requested attributes
-	 * and then save these attributes on the models in Morpheus. This requires adding, removing, and saving the various
-	 * models to the ComputeServer using the appropriate contexts. The ServicePlan, memory, cores, coresPerSocket, maxStorage values
-	 * defined on ResizeRequest will be set on the ComputeServer upon return of a successful ServiceResponse
-	 *
-	 * @param server to resize
-	 * @param resizeRequest the resize requested parameters
-	 * @param opts additional options
-	 * @return Response from the API
-	 */
-	@Override
-	ServiceResponse resizeServer(ComputeServer server, ResizeRequest resizeRequest, Map opts) {
-		return null
-	}
-
-	/**
-	 * Import a workload to an image
-	 * @param importWorkloadRequest The {@link ImportWorkloadRequest} containing the workload, source image, target image, image base path, and storage bucket
-	 * @return A ServiceResponse indicating success or failure
-	 */
-	@Override
-	ServiceResponse<ImportWorkloadResponse> importWorkload(ImportWorkloadRequest importWorkloadRequest) {
-		return null
 	}
 
 	@Override
