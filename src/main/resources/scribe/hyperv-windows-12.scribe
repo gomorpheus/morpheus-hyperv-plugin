@@ -1,0 +1,58 @@
+resource "workload-type" "hyperv-windows-2012_r2" {
+  code             = "hyperv-windows-2012_r2"
+  shortName        = "windows"
+  name             = "Windows 2012 r2"
+  ports            = [3389]
+  containerVersion = "2012 r2"
+  repositoryImage  = null
+  imageCode        = "morpheus windows 2012 r2",
+  entryPoint       = null
+  statTypeCode     = "vm"
+  logTypeCode      = "windows"
+  category         = "windows",
+  cloneType        = "windows",
+  priorityOrder    = 0,
+  serverType       = "vm",
+  providerType     = "hyperv",
+  showServerLogs   = true
+  checkTypeCode    = null
+  virtualImage     = virtual-image.hyperv-image-morpheus-windows-2012-r2
+  containerPorts   = ["windows.3389"]
+  actions          = ["generic-remove-node"]
+  provisionType    = "hyperv"
+  backupType       = "hypervSnapshot"
+}
+
+resource "workload-type-set" "hyperv-windows-2012_r2-set" {
+  code           = "hyperv-windows-2012_r2-set"
+  containerType  = container-type.hyperv-windows-2012_r2
+  priorityOrder  = 0
+  category       = "windows",
+  containerCount = 1
+}
+
+resource "instance-type-layout" "hyperv-windows-2012_r2-single" {
+  code                        = "hyperv-windows-2012_r2-single"
+  name                        = "Hyper-V VM"
+  sortOrder                  = 30
+  serverType                 = "vm"
+  supportsConvertToManaged = true
+  instanceVersion            = "2012 r2"
+  description                 = "This will provision a single vm in hyperv"
+  instanceType               = "windows"
+  serverCount                = 1
+  portCount                  = 1
+  enabled                     = false
+  creatable                   = false
+  containers                  = [hyperv-windows-2012_r2-set]
+  actions                     = ["generic-add-node"]
+  provisionType              = "hyperv"
+}
+
+resource "scale-action" "hyperv-windows-2012_r2_core-single" {
+  code        = "hyperv-windows-2012_r2_core-single"
+  scaleType  = "action"
+  layout      = instance-type-layout.hyperv-windows-2012_r2-single
+  upAction   = "generic-add-node"
+  downAction = "generic-add-node"
+}
