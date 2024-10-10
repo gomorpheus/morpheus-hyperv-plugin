@@ -800,6 +800,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				WorkloadType workloadType = computeTypeSet.getWorkloadType()
 				Long workloadTypeId = workloadType.id
 				containerType = morpheus.services.containerType.get(workloadTypeId)
+				log.info("RAZI :: containerType.imageCode: ${containerType.imageCode}")
 			}
 			log.info("RAZI :: before if(layout && typeSet) >> containerType: ${containerType}")
 			if(layout && typeSet) {
@@ -989,36 +990,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		return address && NetworkUtility.validateIpAddr(address, false) == false && NetworkUtility.validateIpAddr(address, true) == true
 	}
 
-	def setNetworkInfo(List<ComputeServerInterface> serverInterfaces, externalNetworks) {
-		log.info("serverInterfaces: ${serverInterfaces}, externalNetworks: ${externalNetworks}")
-		try {
-			if(externalNetworks?.size() > 0) {
-				serverInterfaces?.eachWithIndex { networkInterface, index ->
-					if(networkInterface.externalId) {
-						//check for changes?
-					} else {
-						def matchNetwork = externalNetworks.find{networkInterface.internalId == it.uuid}
-						if(!matchNetwork) {
-							def displayOrder = "${networkInterface.displayOrder}"
-							matchNetwork = externalNetworks.find{displayOrder == it.deviceIndex}
-						}
-						if(matchNetwork) {
-							networkInterface.externalId = "${matchNetwork.deviceIndex}"
-							networkInterface.internalId = "${matchNetwork.uuid}"
-							networkInterface.macAddress = matchNetwork.macAddress
-							if(networkInterface.type == null) {
-								networkInterface.type = new ComputeServerInterfaceType(code: 'xenNetwork')
-							}
-							context.async.computeServer.computeServerInterface.save([networkInterface]).blockingGet()
-						}
-					}
-				}
-			}
-		} catch(e) {
-			log.error("setNetworkInfo error: ${e}", e)
-		}
-	}
-
 	@Override
 	ServiceResponse finalizeHost(ComputeServer server) {
 		ServiceResponse rtn = ServiceResponse.prepare()
@@ -1059,7 +1030,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					}
 				}
 				log.info("RAZI :: serverDetail.networks: ${serverDetail.networks}")
-				setNetworkInfo(server.interfaces, serverDetail.networks)
+//				setNetworkInfo(server.interfaces, serverDetail.networks)
 				context.async.computeServer.save(server).blockingGet()
 				rtn.success = true
 			}
