@@ -3,6 +3,9 @@ package com.morpheusdata.hyperv
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.backup.BackupRestoreProvider
+import com.morpheusdata.core.backup.response.BackupRestoreResponse
+import com.morpheusdata.hyperv.utils.HypervOptsUtility
+import com.morpheusdata.model.Workload
 import com.morpheusdata.response.ServiceResponse;
 import com.morpheusdata.model.BackupRestore;
 import com.morpheusdata.model.BackupResult;
@@ -15,10 +18,12 @@ class HyperVBackupRestoreProvider implements BackupRestoreProvider {
 
 	Plugin plugin
 	MorpheusContext morpheusContext
+	HyperVApiService apiService
 
 	HyperVBackupRestoreProvider(Plugin plugin, MorpheusContext morpheusContext) {
 		this.plugin = plugin
 		this.morpheusContext = morpheusContext
+		this.apiService = new HyperVApiService(morpheusContext)
 	}
 	
 	/**
@@ -112,7 +117,37 @@ class HyperVBackupRestoreProvider implements BackupRestoreProvider {
 	 */
 	@Override
 	ServiceResponse restoreBackup(BackupRestore backupRestore, BackupResult backupResult, Backup backup, Map opts) {
-		return ServiceResponse.success()
+		log.debug("restoreBackup {}", backupResult)
+		ServiceResponse rtn = ServiceResponse.prepare(new BackupRestoreResponse(backupRestore))
+		try{
+			def config = backupResult.getConfigMap()
+			def snapshotId = config.snapshotId
+			def vmId = config.vmId
+			if(snapshotId) {
+				def workload = morpheusContext.services.workload.get(backupResult.containerId)
+				def server = morpheusContext.services.computeServer.get(workload.serverId)
+				def restoreOpts = HypervOptsUtility.getAllHypervWorloadOpts(morpheusContext, workload)
+				//execute restore
+				// start the server if it was started before the restore
+				def startAfterRestore = (workload.status == Workload.Status.running)
+				def restoreResults = apiService.restoreServer(restoreOpts, vmId, snapshotId)
+				if(restoreResults.success && startAfterRestore) {
+					def hypervOpts = HypervOptsUtility.getAllHypervServerOpts(morpheusContext, server)
+					apiService.startServer(hypervOpts, hypervOpts.name)
+					rtn.data.backupRestore.status = BackupResult.Status.SUCCEEDED
+					rtn.data.updates = true
+					rtn.success = true
+				} else {
+					rtn.data.backupRestore.status = BackupResult.Status.FAILED
+					rtn.data.updates = true
+				}
+			}
+		} catch(e) {
+			log.error("restoreBackup: ${e}", e)
+			rtn.msg = e.getMessage()
+			rtn.success = false
+		}
+		return rtn
 	}
 
 	/**

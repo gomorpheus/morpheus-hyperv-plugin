@@ -3,6 +3,7 @@ package com.morpheusdata.hyperv.utils
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.data.DataQuery
 import com.morpheusdata.hyperv.HyperVApiService
+import com.morpheusdata.model.Workload
 import groovy.util.logging.Slf4j
 
 /**
@@ -46,10 +47,10 @@ class HypervOptsUtility {
         return rtn
     }
 
-    static getHypervWorkloadOpts(MorpheusContext context, container) {
-        def zoneConfig = container.server.zone.getConfigMap()
+    static getHypervWorkloadOpts(MorpheusContext context, Workload container) {
+        def zoneConfig = container.server.cloud.getConfigMap()
         def serverConfig = container.server.getConfigMap()
-        def containerConfig = container.getConfigProperties()
+        def containerConfig = container.getConfigMap()
         def network = context.services.network.get(containerConfig.networkId?.toLong())
         def serverFolder = "morpheus_server_${container.server.id}"
         def rootVolume = container.server.volumes?.find{it.rootVolume == true}
@@ -62,8 +63,7 @@ class HypervOptsUtility {
         def dataDisks = getContainerDataDiskList(container)*/
         def platform = (container.server.serverOs?.platform == 'windows' || container.server.osType == 'windows') ? 'windows' : 'linux'
         return [config:serverConfig, vmId: container.server.externalId, name: container.server.externalId, server:container.server, memory:maxMemory,
-                maxCpu:maxCpu, maxCores:maxCores, serverFolder:serverFolder, hostname:container.getExternalHostname(), network:network, platform:platform]
-//                osDiskSize:maxStorage, dataDisks:dataDisks, maxTotalStorage:maxTotalStorage]
+                maxCpu:maxCpu, maxCores:maxCores, serverFolder:serverFolder, hostname:container.server.getExternalHostname(), network:network, platform:platform]
     }
 
     static getHypervZoneOpts(MorpheusContext context, zone) {
@@ -73,6 +73,7 @@ class HypervOptsUtility {
         return [account:zone.account, zoneConfig:zoneConfig, zone:zone, publicKey:keyPair?.publicKey, privateKey:keyPair?.privateKey]
         // TODO: below line is commented for now, need to work on this if its needed.
 //        rpcService:rpcService, commandService:commandService]
+       // check: commandService
     }
 
     static getHypervHypervisorOpts(hypervisor) {

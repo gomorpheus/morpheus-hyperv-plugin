@@ -12,7 +12,7 @@ resource "workload-type" "ubuntu-hyperv-18_04" {
   showServerLogs   = true
   checkTypeCode    = "containerCheck"
   mountPoint       = "/morpheus"
-  virtualImage     = virtual-image.hyperv-image-morpheus-ubuntu-18_04
+  virtualImage     = virtual-image.hyperv-image-morpheus-ubuntu-18_04_20240604.amd64
   containerPorts = ["ubuntu.22"]
   actions = ["ubuntu-remove-node"]
   provisionType    = "hyperv"
@@ -21,7 +21,7 @@ resource "workload-type" "ubuntu-hyperv-18_04" {
 
 resource "workload-type-set" "ubuntu-hyperv-18_04-set" {
   code           = "ubuntu-hyperv-18.04-set"
-  workloadType   = workload-type.ubuntu-hyperv-18_04
+  workloadType   = workload-type.ubuntu-hyperv-18.04
   priorityOrder  = 0
   dynamicCount   = true
   containerCount = 1
@@ -48,7 +48,7 @@ resource "instance-type-layout" "ubuntu-hyperv-18_04" {
 resource "scale-action" "ubuntu-hyperv-18_04" {
   code       = "ubuntu-hyperv-18.04"
   scaleType  = "action"
-  layout     = instance-type-layout.ubuntu-hyperv-18_04
+  layout     = instance-type-layout.ubuntu-hyperv-18.04
   upAction   = "ubuntu-add-node"
   downAction = "ubuntu-remove-node"
 }

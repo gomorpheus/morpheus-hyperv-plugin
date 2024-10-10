@@ -79,16 +79,15 @@ class HyperVApiService {
             fileList << [inputStream: metadataFile.inputStream, contentLength: metadataFile.contentLength, targetPath: "${tgtFolder}\\metadata.json".toString(), copyRequestFileName: "metadata.json"]
         }
         vhdFiles.each { CloudFile vhdFile ->
-            def imageFileName = extractImageFileName(vhdFile.name)
+			def imageFileName = extractImageFileName(vhdFile.name)
             def filename = extractFileName(vhdFile.name)
             fileList << [inputStream: vhdFile.inputStream, contentLength: vhdFile.getContentLength(), targetPath: "${tgtFolder}\\${imageFileName}".toString(), copyRequestFileName: filename]
         }
         fileList.each { Map fileItem ->
             Long contentLength = (Long) fileItem.contentLength
-            def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.server, fileItem.copyRequestFileName, fileItem.targetPath, fileItem.inputStream, contentLength, null, true)
-            rtn.success = fileResults.success
+			def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.hypervisor, fileItem.copyRequestFileName, fileItem.targetPath, fileItem.inputStream, contentLength, null, true)
+			rtn.success = fileResults.success
         }
-
         return rtn
     }
 
@@ -257,7 +256,7 @@ class HyperVApiService {
                 def imageFolderName = opts.serverFolder
                 def networkName = opts.network?.name
                 def diskFolder = "${diskRoot}\\${imageFolderName}"
-                def bootDiskName = opts.diskMap?.bootDisk?.fileName ?: 'morpheus-ubuntu-22_04-amd64-20240604.vhd'
+                def bootDiskName = opts.diskMap?.bootDisk?.fileName ?: 'morpheus-ubuntu-22_04-amd64-20240604.vhd' //'ubuntu-14_04.vhd'
                 log.info("RAZI :: cloneServer >> bootDiskName: ${bootDiskName}")
                 disks.osDisk = [externalId: bootDiskName]
                 def osDiskPath = diskFolder + '\\' + bootDiskName
@@ -292,8 +291,6 @@ class HyperVApiService {
 //                log.info("launchCommand: ${launchCommand}")
                 log.info("RAZI :: launchCommand: ${launchCommand}")
                 def out = executeCommand(launchCommand, opts)
-
-                log.info("RAZI :: run server: ${out}")
                 log.debug("run server: ${out}")
                 log.info("RAZI :: out.success: ${out.success}")
                 if (out.success == true) {
@@ -306,6 +303,7 @@ class HyperVApiService {
                         secureBootCommand = "Set-VMFirmware \"${opts.name}\" -EnableSecureBoot Off"
                     }
                     log.info("RAZI :: secureBootCommand: ${secureBootCommand}")
+
                     executeCommand(secureBootCommand, opts)
                     //if we have to tag it to a VLAN
                     log.info("RAZI :: opts.networkConfig.primaryInterface.network.vlanId: ${opts.networkConfig.primaryInterface.network.vlanId}")
@@ -365,13 +363,11 @@ class HyperVApiService {
                     enableDynamicMemory(opts)
                     log.info("RAZI :: enableDynamicMemory called")
 
-                    //need to add non boot disks from the diskMap - TODO
                     //cloud init
                     if (opts.cloudConfigBytes) {
-                        def isoAction = [inline: true, action: 'rawfile', content: opts.cloudConfigBytes.encodeAsBase64(), targetPath: "${diskFolder}\\config.iso".toString(), opts: [:]]
-                        // TODO: need to check commandService, not available for now
-                        /*def isoPromise = opts.commandService.sendAction(opts.hypervisor, isoAction)
-                        def isoResults = isoPromise.get(1000l * 60l * 3l)*/
+                        InputStream inputStream = new ByteArrayInputStream(opts.cloudConfigBytes)
+                        def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.hypervisor, "config.iso", "${diskFolder}\\config.iso", inputStream, opts.cloudConfigBytes?.size(), null, true)
+                        log.debug ("clone fileResults: ${fileResults}")
                         if (generation == 2) {
                             createCdrom(opts, opts.name, "${diskFolder}\\config.iso")
                         } else {
@@ -503,19 +499,19 @@ class HyperVApiService {
                 sleep(1000l * 5l)
                 def serverDetail = getServerDetails(opts, vmId)
                 log.info("RAZI :: checkServerReady >> serverDetail: ${serverDetail}")
+                log.debug("checkServerReady: serverDetail: ${serverDetail}")
                 if (serverDetail.success == true) {
                     if (serverDetail.server.ipAddress) {
                         rtn.success = true
                         rtn.server = serverDetail.server
                         pending = false
                     } else {
-//                        opts.server.refresh()
-                        log.debug("check server loading server: ip: ${opts.server.internalIp}")
-                        log.info("RAZI :: opts.server.internalIp: ${opts.server.internalIp}")
-                        if (opts.server.internalIp) {
+                        //opts.server.refresh()
+                        log.info("check server loading newServer: ip: ${opts.newServer.internalIp}")
+                        if (opts.newServer.internalIp) {
                             rtn.success = true
                             rtn.server = serverDetail.server
-                            rtn.server.ipAddress = opts.server.internalIp
+                            rtn.server.ipAddress = opts.newServer.internalIp
                             pending = false
                         }
                     }
@@ -1149,13 +1145,13 @@ class HyperVApiService {
         executeCommand(startVM, opts)
     }
 
-    def extractFileName(imageName) {
-        def rtn = imageName
-        def lastIndex = imageName?.lastIndexOf('/')
-        if (lastIndex > -1)
-            rtn = imageName.substring(lastIndex + 1)
-        return rtn
-    }
+	def extractFileName(imageName) {
+		def rtn = imageName
+		def lastIndex = imageName?.lastIndexOf('/')
+		if (lastIndex > -1)
+			rtn = imageName.substring(lastIndex + 1)
+		return rtn
+	}
 
     def extractImageFileName(imageName) {
         def rtn = extractFileName(imageName)
