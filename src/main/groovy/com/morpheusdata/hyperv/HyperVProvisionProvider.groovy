@@ -151,7 +151,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				custom:false,
 				fieldClass:null
 		)
-
 		options << new OptionType(
 				name: 'host',
 				code: 'provisionType.hyperv.host',

@@ -28,7 +28,6 @@ class VhdUtility {
      */
     static Long extractVhdDiskSize(InputStream inputStream) throws IOException {
         Long rtn = 0L;
-        log.info ("Ray :: extractVhdDiskSize: inputStream?.bytes?.size(): ${inputStream?.bytes?.size()}")
 
         //TarArchiveEntry tarEntry = tarStream.getNextTarEntry()
        /* if (tarEntry == null) {
@@ -44,27 +43,21 @@ class VhdUtility {
 
             // get the offset relative to the current offset
             currentOffset = (VHD_DISK_SIZE_OFFSET - totalOffset)
-            log.info ("Ray :: extractVhdDiskSize: currentOffset: ${currentOffset}")
             totalOffset = currentOffset + VHD_DISK_SIZE_LENGTH
-            log.info ("Ray :: extractVhdDiskSize: totalOffset: ${totalOffset}")
             // Read disk size
             Long diskSize = getHeaderValueLong(bufferedStream, currentOffset, VHD_DISK_SIZE_LENGTH)
             log.debug("extractVhdDiskSize diskSize: ${diskSize}")
-            log.info ("Ray :: extractVhdDiskSize: diskSize: ${diskSize}")
 
             // Get the disk type to determine if the proper headers are in the VHD (may not be needed)
             // get the offset relative to the current offset
             currentOffset = (VHD_DISK_TYPE_OFFSET - totalOffset)
-            log.info ("Ray :: extractVhdDiskSize: currentOffset1: ${currentOffset}")
+
             totalOffset += currentOffset + VHD_DISK_TYPE_LENGTH
-            log.info ("Ray :: extractVhdDiskSize: totalOffset1: ${totalOffset}")
             // // Read disk type
             int diskType = getHeaderValueInt(bufferedStream, currentOffset, VHD_DISK_TYPE_LENGTH)
-            log.info ("Ray :: extractVhdDiskSize: diskType: ${diskType}")
             log.debug("extractVhdDiskSize diskType: ${diskType}")
 
             // the VHD file was formatted as expected and contained a disk type in the file header
-            log.info ("Ray :: extractVhdDiskSize: rtn before: ${rtn}")
             if(diskSize && diskSize != 0 && (diskType == VHD_DISK_TYPE_FIXED || diskType == VHD_DISK_TYPE_DYNAMIC)) {
                 rtn = diskSize
             } /*else {
@@ -74,11 +67,9 @@ class VhdUtility {
                 log.debug("extractVhdDiskSize tar entry size: ${rtn}")
 
             }*/
-            log.info ("Ray :: extractVhdDiskSize: rtn after: ${rtn}")
         } finally {
             bufferedStream?.close()
         }
-        log.info ("Ray :: extractVhdDiskSize: rtn last: ${rtn}")
         return rtn
     }
 
