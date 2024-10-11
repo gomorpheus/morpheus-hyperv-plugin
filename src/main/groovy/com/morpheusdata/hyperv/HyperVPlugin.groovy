@@ -37,8 +37,12 @@ class HyperVPlugin extends Plugin {
     /**
      * Called when a plugin is being removed from the plugin manager (aka Uninstalled)
      */
-    @Override
-    void onDestroy() {
-        //nothing to do for now
-    }
+	@Override
+	void onDestroy() {
+		List<String> seedsToRun = [
+			"application.ZonesTypeXenSeed",
+			"application.ProvisionTypeXenSeed",
+		]
+		this.morpheus.services.seed.reinstallSeedData(seedsToRun) // needs to be synchronous to prevent seeds from running during plugin install
+	}
 }
