@@ -489,6 +489,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			def node = context.async.computeServer.get(containerConfig.hostId?.toLong()).blockingGet()
 			node = containerConfig.hostId ? node : pickHypervHypervisor(cloud)
 			String generation = 'generation1'
+			log.info("RAZI :: runWorkload >> node: ${node}")
 			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
 			hypervOpts.hypervisor = node
 			if (containerConfig.imageId || containerConfig.template || workload.workloadType.virtualImage?.id) {
@@ -496,6 +497,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				virtualImage = context.async.virtualImage.get(virtualImageId).blockingGet()
 				generation = virtualImage.getConfigProperty('generation')
 				imageId = virtualImage.locations.find { it.refType == "ComputeZone" && it.refId == cloud.id }?.externalId
+				log.info("RAZI :: runWorkload >> before if(!imageId) >> imageId: ${imageId}")
 				if (!imageId) {
 					def cloudFiles = context.async.virtualImage.getVirtualImageFiles(virtualImage).blockingGet()
 					if (cloudFiles?.size() == 0) {
@@ -520,7 +522,9 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					hypervOpts.virtualImage = virtualImage
 					hypervOpts.zone = cloud
 					log.debug "hypervOpts: ${hypervOpts}"
+					log.info("RAZI :: runWorkload >> hypervOpts: ${hypervOpts}")
 					def imageResults = apiService.insertContainerImage(hypervOpts)
+					log.info("RAZI :: runWorkload >> imageResults: ${imageResults}")
 					log.debug("imageResults: ${imageResults}")
 					if (imageResults.success == true) {
 						imageId = imageResults.imageId
@@ -600,7 +604,9 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					hypervOpts.cloudConfigUser = workloadRequest?.cloudConfigUser ?: null
 					hypervOpts.cloudConfigMeta = workloadRequest?.cloudConfigMeta ?: null
 					hypervOpts.cloudConfigNetwork = workloadRequest?.cloudConfigNetwork ?: null
+					log.info("RAZI :: virtualImage.isSysprep: ${virtualImage.isSysprep}")
 					def isoBuffer = context.services.provision.buildIsoOutputStream(virtualImage.isSysprep, PlatformType.valueOf(hypervOpts.platform), hypervOpts.cloudConfigMeta, hypervOpts.cloudConfigUser, hypervOpts.cloudConfigNetwork)
+					log.info("RAZI :: runWorkload >> isoBuffer: ${isoBuffer}")
 					hypervOpts.cloudConfigBytes = isoBuffer
 					server.cloudConfigUser = hypervOpts.cloudConfigUser
 					server.cloudConfigMeta = hypervOpts.cloudConfigMeta
@@ -616,8 +622,11 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				server = saveAndGetMorpheusServer(server, true)
 				//create it
 				hypervOpts.newServer = server
+				log.info("RAZI :: runWorkload >> hypervOpts.newServer.internalIp: ${hypervOpts.newServer.internalIp}")
+				log.info("RAZI :: runWorkload >> hypervOpts: ${hypervOpts}")
 				def createResults = apiService.cloneServer(hypervOpts)
 				log.debug("createResults: ${createResults}")
+				log.info("RAZI :: runWorkload >> createResults: ${createResults}")
 				if (createResults.success == true && createResults.server) {
 					server.externalId = createResults.server.externalId
 					provisionResponse.externalId = server.externalId
@@ -635,9 +644,12 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						}
 					}
 					server = saveAndGetMorpheusServer(server, true)
+					log.info("RAZI :: runWorkload >> server.externalId: ${server.externalId}")
 					def serverDetails = apiService.getServerDetails(hypervOpts, server.externalId)
 					log.debug("runWorkload: serverDetails: ${serverDetails}")
 					if (serverDetails.success == true) {
+						log.info("RAZI :: runWorkload >> createResults.server: ${createResults.server}")
+						log.info("RAZI :: runWorkload >> serverDetails.server: ${serverDetails.server}")
 						def newIpAddress = serverDetails.server?.ipAddress ?: createResults.server?.ipAddress
 						def macAddress = serverDetails.server?.macAddress
 						opts.network = applyComputeServerNetworkIp(server, newIpAddress, newIpAddress, 0, macAddress)
@@ -1350,23 +1362,11 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			log.info("RAZI :: layout: ${layout}")
 			def typeSet = server.typeSet
 			log.info("RAZI :: typeSet: ${typeSet}")
-			Long computeTypeSetId = typeSet?.id
-			WorkloadType containerType
-			log.info("RAZI :: computeTypeSetId: ${computeTypeSetId}")
-			if (computeTypeSetId){
-				ComputeTypeSet computeTypeSet = morpheus.services.computeTypeSet.get(computeTypeSetId)
-				log.info("RAZI :: if (computeTypeSetId) >> computeTypeSet: ${computeTypeSet}")
-				WorkloadType workloadType = computeTypeSet.getWorkloadType()
-				Long workloadTypeId = workloadType.id
-				containerType = morpheus.services.containerType.get(workloadTypeId)
-				log.info("RAZI :: containerType.imageCode: ${containerType.imageCode}")
-			}
-			log.info("RAZI :: before if(layout && typeSet) >> containerType: ${containerType}")
 			if(layout && typeSet) {
-				Long virtualImageId = containerType.virtualImage.id
-				log.info("RAZI :: if(layout && typeSet) >> virtualImageId: ${virtualImageId}")
-				virtualImage = morpheus.services.virtualImage.get(virtualImageId)
+				log.info("RAZI :: typeSet.workloadType: ${typeSet.workloadType}")
+				virtualImage = typeSet.workloadType.virtualImage
 				log.info("RAZI :: if(layout && typeSet) >> virtualImage: ${virtualImage}")
+				log.info("RAZI :: if(layout && typeSet) >> typeSet.workloadType.imageCode: ${typeSet.workloadType.imageCode}")
 				imageId = virtualImage.externalId
 				log.info("RAZI :: if(layout && typeSet) >> imageId: ${imageId}")
 			} else if(imageType == 'custom' && config.template) {
@@ -1377,7 +1377,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				imageId = virtualImage.externalId
 				log.info("RAZI :: else if(imageType == 'custom' && config.template) >> imageId: ${imageId}")
 			} else {
-				virtualImage = new VirtualImage(code: 'hyperv.image.morpheus.ubuntu.18.04.3-v1.ubuntu.18.04.3.amd64')
+				virtualImage = new VirtualImage(code: 'hyperv.image.morpheus.ubuntu.16.04.3-v1.ubuntu.16.04.3.amd64') //better this later
 				log.info("RAZI :: } else { >> virtualImage: ${virtualImage}")
 			}
 			log.info("RAZI :: before if(!imageId) >> imageId: ${imageId}")
@@ -1386,7 +1386,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				log.info("RAZI :: cloudFiles: ${cloudFiles}")
 
 				def containerImage = [
-						name			: virtualImage.name ?: containerType.imageCode,
+						name			: virtualImage.name ?: typeSet.workloadType.imageCode,
 						minDisk			: 5,
 						minRam			: 512l * ComputeUtility.ONE_MEGABYTE,
 						virtualImageId	: virtualImage.id,
@@ -1401,8 +1401,8 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				hypervOpts.userId = server.createdBy?.id
 				hypervOpts.user = server.createdBy
 				hypervOpts.virtualImage = virtualImage
-				hypervOpts.server = node
-				log.info("RAZI :: hypervOpts.user: ${hypervOpts.user}")
+//				hypervOpts.hyperVisor = node
+//				log.info("RAZI :: hypervOpts.user: ${hypervOpts.user}")
 
 				log.debug "hypervOpts:${hypervOpts}"
 				def imageResults = apiService.insertContainerImage(hypervOpts)
@@ -1421,6 +1421,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				hypervOpts.secureBoot = virtualImage?.uefi ?: false
 				hypervOpts.imageId = imageId
 				hypervOpts.diskMap = context.services.virtualImage.getImageDiskMap(virtualImage)
+				server = saveAndGetMorpheusServer(server, true)
 				hypervOpts += HypervOptsUtility.getHypervServerOpts(context, server)
 				hypervOpts.networkConfig = hostRequest.networkConfiguration
 				hypervOpts.cloudConfigUser = hostRequest.cloudConfigUser
@@ -1436,7 +1437,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				def isoBuffer = context.services.provision.buildIsoOutputStream(
 						hypervOpts.isSysprep, PlatformType.valueOf(server.osType), hypervOpts.cloudConfigMeta, hypervOpts.cloudConfigUser, hypervOpts.cloudConfigNetwork)
 
-				log.info("RAZI :: isoBuffer: ${isoBuffer}")
 				hypervOpts.cloudConfigBytes = isoBuffer
 				server.cloudConfigUser = hypervOpts.cloudConfigUser
 				server.cloudConfigMeta = hypervOpts.cloudConfigMeta
@@ -1445,10 +1445,11 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 //				context.async.computeServer.save(server).blockingGet()
 				server = saveAndGetMorpheusServer(server, true)
 				hypervOpts.newServer = server
+				log.info("RAZI :: hypervOpts.newServer.internalIp: ${hypervOpts.newServer.internalIp}")
+				log.info("RAZI :: hypervOpts.server.internalIp: ${hypervOpts.server.internalIp}")
 
 				//create it in hyperv
 				log.debug("create server:${hypervOpts}")
-				log.info("RAZI :: before createResults >> isoBuffer: ${isoBuffer}")
 				def createResults = apiService.cloneServer(hypervOpts)
 				log.info("RAZI :: createResults: ${createResults}")
 				log.debug("create server results:${createResults}")
@@ -1461,6 +1462,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						server.parentServer = node
 //						opts.server.save(flush:true)
 						server = saveAndGetMorpheusServer(server, true)
+						log.info("RAZI :: runHost >> server.externalId: ${server.externalId}")
 						def serverDetails = apiService.getServerDetails(hypervOpts, server.externalId)
 						log.info("RAZI :: serverDetails: ${serverDetails}")
 						if(serverDetails.success == true) {
