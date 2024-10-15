@@ -95,7 +95,6 @@ class HyperVApiService {
         log.info("cloneImage: ${srcImage} -> ${tgtName}")
         def rtn = [success: false]
         try {
-            log.info("RAZI : cloneImage >> opts.diskRoot: ${opts.diskRoot}")
             def diskRoot = opts.diskRoot
             def imageFolderName = opts.serverFolder
             def tgtFolder = "${diskRoot}\\${imageFolderName}"
