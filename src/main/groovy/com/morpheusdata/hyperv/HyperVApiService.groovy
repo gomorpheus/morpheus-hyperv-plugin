@@ -98,17 +98,13 @@ class HyperVApiService {
             log.info("RAZI : cloneImage >> opts.diskRoot: ${opts.diskRoot}")
             def diskRoot = opts.diskRoot
             def imageFolderName = opts.serverFolder
-            log.info("RAZI :: cloneImage >> opts.serverFolder: ${opts.serverFolder}")
             def tgtFolder = "${diskRoot}\\${imageFolderName}"
             def command = "mkdir \"${tgtFolder}\""
             def out = executeCommand(command, opts)
-            log.info("RAZI :: cloneImage >> out.success1: ${out.success}")
             command = "xcopy \"${srcImage}\" \"${tgtFolder}\" /y /i /r /h /s"
-            log.info("RAZI :: cloneImage >> command: ${command}")
-//            log.debug("cloneImage command: ${command}")
+            log.debug("cloneImage command: ${command}")
             out = executeCommand(command, opts)
-            log.info("RAZI :: cloneImage >> out.success2: ${out.success}")
-//            log.info("cloneImage: ${out}")
+            log.info("cloneImage: ${out}")
             if (out.success == true) {
                 command = "dir \"${tgtFolder}\""
                 out = executeCommand(command, opts)
@@ -252,11 +248,8 @@ class HyperVApiService {
         def rtn = [success: false]
         try {
             def imageName = opts.imageId
-            log.info("RAZI :: cloneServer >> imageName: ${imageName}")
-            log.info("RAZI :: cloneServer >> opts.serverFolder: ${opts.serverFolder}")
             def cloneResults = cloneImage(opts, imageName, opts.serverFolder)
-//            log.info "cloneResults: ${cloneResults}"
-            log.info("RAZI :: cloneServer >> cloneResults: ${cloneResults}")
+            log.info "cloneResults: ${cloneResults}"
             if (cloneResults.success == true) {
                 def disks = [osDisk: [:], dataDisks: []]
                 def diskRoot = opts.diskRoot
@@ -265,18 +258,11 @@ class HyperVApiService {
                 def networkName = opts.network?.name
                 def diskFolder = "${diskRoot}\\${imageFolderName}"
                 def bootDiskName = opts.diskMap?.bootDisk?.fileName ?: 'morpheus-ubuntu-22_04-amd64-20240604.vhd' //'ubuntu-14_04.vhd'
-                log.info("RAZI :: cloneServer >> bootDiskName: ${bootDiskName}")
                 disks.osDisk = [externalId: bootDiskName]
                 def osDiskPath = diskFolder + '\\' + bootDiskName
-                log.info("RAZI :: cloneServer >> osDiskPath: ${osDiskPath}")
                 def vmFolder = "${vmRoot}\\${imageFolderName}"
-                log.info("RAZI :: cloneServer >> vmFolder: ${osDiskPath}")
                 //network config
                 def additionalNetworks = []
-                log.info("RAZI :: opts.networkConfig: ${opts.networkConfig}")
-                log.info("RAZI :: opts.networkConfig?.primaryInterface: ${opts.networkConfig?.primaryInterface}")
-                log.info("RAZI :: opts.networkConfig?.primaryInterface?.network: ${opts.networkConfig?.primaryInterface?.network}")
-                log.info("RAZI :: opts.networkConfig?.primaryInterface?.network?.externalId: ${opts.networkConfig?.primaryInterface?.network?.externalId}")
                 if (opts.networkConfig?.primaryInterface?.network?.externalId) { //new style multi network
                     def primaryInterface = opts.networkConfig.primaryInterface
                     networkName = primaryInterface.network.externalId
@@ -302,39 +288,29 @@ class HyperVApiService {
                 //[-BootDevice <BootDevice> {CD | Floppy | LegacyNetworkAdapter | IDE | NetworkAdapter | VHD} ] [-ComputerName <String[]> ]
                 //[-Path <String> ] [-SwitchName <String> ] [-Confirm] [-WhatIf] [ <CommonParameters>]
                 //run it
-//                log.info("launchCommand: ${launchCommand}")
-                log.info("RAZI :: launchCommand: ${launchCommand}")
+                log.info("launchCommand: ${launchCommand}")
                 def out = executeCommand(launchCommand, opts)
                 log.debug("run server: ${out}")
-                log.info("RAZI :: out.success: ${out.success}")
                 if (out.success == true) {
                     //we need to fix SecureBoot
                     String secureBootCommand
-                    log.info("RAZI :: opts.secureBoot: ${opts.secureBoot}")
                     if (opts.secureBoot) {
                         secureBootCommand = "Set-VMFirmware \"${opts.name}\" -EnableSecureBoot On"
                     } else {
                         secureBootCommand = "Set-VMFirmware \"${opts.name}\" -EnableSecureBoot Off"
                     }
-                    log.info("RAZI :: secureBootCommand: ${secureBootCommand}")
 
                     executeCommand(secureBootCommand, opts)
                     //if we have to tag it to a VLAN
-                    log.info("RAZI :: opts.networkConfig: ${opts.networkConfig}")
-                    log.info("RAZI :: opts.networkConfig.primaryInterface: ${opts.networkConfig.primaryInterface}")
-                    log.info("RAZI :: opts.networkConfig.primaryInterface.network: ${opts.networkConfig.primaryInterface.network}")
-                    log.info("RAZI :: opts.networkConfig.primaryInterface.network.vlanId: ${opts.networkConfig.primaryInterface.network.vlanId}")
                     if (opts.networkConfig.primaryInterface.network.vlanId) {
                         String setVlanCommand = "Set-VMNetworkAdapterVlan -VMName \"${opts.name}\" -Access -VlanId ${opts.networkConfig.primaryInterface.network.vlanId}"
                         executeCommand(setVlanCommand, opts)
                     }
                     //add additional NICS
-                    log.info("RAZI :: additionalNetworks: ${additionalNetworks}")
                     if (additionalNetworks) {
                         additionalNetworks.each { additionalNetwork ->
                             def addNetworkCommand = "Add-VMNetworkAdapter -VMName \"${opts.name}\" -Name \"${additionalNetwork.name}\" -SwitchName \"${additionalNetwork.switchName}\""
                             executeCommand(addNetworkCommand, opts)
-                            log.info("RAZI :: additionalNetwork.vlanId: ${additionalNetwork.vlanId}")
                             if (additionalNetwork.vlanId) {
                                 String setVlanCommand = "Set-VMNetworkAdapterVlan -VMName \"${opts.name}\" -VMNetworkAdapterName \"${additionalNetwork.name}\" -Access -VlanId ${additionalNetwork.vlanId}"
                                 executeCommand(setVlanCommand, opts)
@@ -342,12 +318,9 @@ class HyperVApiService {
                         }
                     }
                     //resize disk
-                    log.info("RAZI :: opts.osDiskSize: ${opts.osDiskSize}")
                     if (opts.osDiskSize)
                         resizeDisk(opts, osDiskPath, opts.osDiskSize)
                     //add disk
-                    log.info("RAZI :: opts.dataDisks?.size(): ${opts.dataDisks?.size()}")
-                    log.info("RAZI :: opts.dataDiskSize: ${opts.dataDiskSize}")
                     if (opts.dataDisks?.size() > 0) {
                         opts.dataDisks?.eachWithIndex { disk, index ->
                             def diskIndex = "${index + 1}"
@@ -376,16 +349,10 @@ class HyperVApiService {
                         attachDisk(opts, opts.name, newDiskPath)
                     }
                     //cpu
-                    log.info("RAZI :: cloneServer >> opts.maxCores: ${opts.maxCores}")
-                    log.info("RAZI :: cloneServer >> opts.maxCores: ${opts.maxCores}")
                     if (opts.maxCores && opts.maxCores > 0) {
-                        //TODO: remove assignment
-                        def updateServer = updateServer(opts, opts.name, [maxCores: opts.maxCores])
-                        log.info("RAZI :: updateServer: ${updateServer}")
+                        updateServer(opts, opts.name, [maxCores: opts.maxCores])
                     }
-                    //TODO: remove assignment
-                    def enableDynamicMemory = enableDynamicMemory(opts)
-                    log.info("RAZI :: enableDynamicMemory: ${enableDynamicMemory}")
+                    enableDynamicMemory(opts)
 
                     //cloud init
                     if (opts.cloudConfigBytes) {
@@ -400,16 +367,11 @@ class HyperVApiService {
                     }
                     //start it
                     sleep(10000) // just a test
-//                    log.info("Starting Server  ${opts.name}")
-                    log.info("RAZI :: Starting Server  ${opts.name}")
+                    log.info("Starting Server  ${opts.name}")
                     startServer(opts, opts.name)
-                    log.info("RAZI :: startServer called")
                     //get details
-//                    log.info("Hyperv Check for Server Ready ${opts.name}")
-                    log.info("RAZI :: opts for checkServerReady: ${opts}")
-                    log.info("RAZI :: opts.name for checkServerReady: ${opts.name}")
+                    log.info("Hyperv Check for Server Ready ${opts.name}")
                     def serverDetail = checkServerReady(opts, opts.name)
-                    log.info("RAZI :: cloneServer >> serverDetail: ${serverDetail}")
                     if (serverDetail.success == true) {
                         // write ip address to notes here
                         updateServer(opts, opts.name, [notes: serverDetail.server?.ipAddress])
@@ -423,7 +385,6 @@ class HyperVApiService {
         } catch (e) {
             log.error("cloneServer error: ${e}", e)
         }
-        log.info("RAZI :: cloneServer >> final rtn: ${rtn}")
         return rtn
     }
 
@@ -522,7 +483,6 @@ class HyperVApiService {
             while (pending) {
                 sleep(1000l * 5l)
                 def serverDetail = getServerDetails(opts, vmId)
-                log.info("RAZI :: checkServerReady >> serverDetail: ${serverDetail}")
                 log.debug("checkServerReady: serverDetail: ${serverDetail}")
                 if (serverDetail.success == true) {
                     if (serverDetail.server.ipAddress) {
@@ -530,9 +490,7 @@ class HyperVApiService {
                         rtn.server = serverDetail.server
                         pending = false
                     } else {
-                        //opts.server.refresh()
-//                        log.info("check server loading newServer: ip: ${opts.newServer.internalIp}")
-                        log.info("RAZI :: checkServerReady >> opts.newServer.internalIp: ${opts.newServer.internalIp}")
+                        log.info("check server loading newServer: ip: ${opts.newServer.internalIp}")
                         if (opts.newServer.internalIp) {
                             rtn.success = true
                             rtn.server = serverDetail.server
@@ -545,13 +503,9 @@ class HyperVApiService {
                 if (attempts > 100)
                     pending = false
             }
-            log.info("RAZI :: checkServerReady >> after while loop >> internalIp: ${opts.newServer.internalIp}")
-            log.info("RAZI :: checkServerReady >> attempts: ${attempts}")
-            log.info("RAZI :: checkServerReady >> pending: ${pending}")
         } catch (e) {
             log.error("An Exception Has Occurred", e)
         }
-        log.info("RAZI :: checkServerReady >> rtn.server: ${rtn.server}")
         return rtn
     }
 
@@ -562,18 +516,14 @@ class HyperVApiService {
             def results = executeCommand(command, opts)
             if (results.success == true && results.exitCode == '0') {
                 def vmData = parseVmDetails(results.data)
-                log.info("RAZI :: getServerDetails >> vmData: ${vmData}")
                 if (vmData.success == true) {
                     command = "Get-VMNetworkAdapter -VMName \"${vmId}\" | Format-List"
                     results = executeCommand(command, opts)
                     if (results.success == true && results.exitCode == '0') {
                         log.debug("network data: ${results.data}")
-                        log.info("RAZI :: getServerDetails >> results.data: ${results.data}")
                         def vmNetworkData = parseVmNetworkDetails(results.data)
-                        log.info("RAZI :: getServerDetails >> vmNetworkData: ${vmNetworkData}")
                         //parse it
                         rtn.server = vmData + vmNetworkData
-                        log.info("RAZI :: getServerDetails >> rtn.server: ${rtn.server}")
                         rtn.success = true
                     }
                 }
@@ -974,9 +924,7 @@ class HyperVApiService {
         //----            -------------- ------           ---------- ----------   ------ -----------
         //Network Adapter False          bw-hyperv-node-2 wheeler    00155D2D5B15 {Ok}   {}
         def rtn = [success: false]
-        log.info("RAZI :: parseVmNetworkDetails >> data: ${data}")
         def vmData = parseHypervListData(data)
-        log.info("RAZI :: parseVmNetworkDetails >> vmData: ${vmData}")
         if (vmData) {
             rtn.device = vmData.Name
             rtn.managementOs = vmData.IsManagementOs
@@ -985,9 +933,7 @@ class HyperVApiService {
             rtn.macAddress = vmData.MacAddress
             rtn.status = vmData.Status
             rtn.ipAddressList = vmData.IPAddresses
-            log.info("RAZI :: parseVmNetworkDetails >> rtn.ipAddressList: ${rtn.ipAddressList}")
             def ipParse = parseIpAddressList(rtn.ipAddressList)
-            log.info("RAZI :: parseVmNetworkDetails >> ipParse: ${ipParse}")
             if (ipParse.ipv6address)
                 rtn.ipv6address = ipParse.ipv6address
             if (ipParse.ipAddress)

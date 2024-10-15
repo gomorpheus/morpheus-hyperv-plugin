@@ -1,12 +1,12 @@
-resource "workload-type" "docker-hyperv-ubuntu-18_04" {
-  code             = "docker-hyperv-ubuntu-18.04"
-  name             = "Docker Ubuntu 18.04"
+resource "workload-type" "docker-hyperv-ubuntu-20_04" {
+  code             = "docker-hyperv-ubuntu-20.04"
+  name             = "Docker Ubuntu 20.04"
   shortName        = "ubuntu"
   ports            = ["22"]
-  containerVersion = "18.04"
+  containerVersion = "20.04"
   containerType    = "docker"
   repositoryImage  = null
-  imageCode        = "morpheus ubuntu 18.04"
+  imageCode        = "morpheus ubuntu 20.04"
   entryPoint       = null
   mountLogs        = "/var/log"
   statTypeCode    = "server"
@@ -23,10 +23,10 @@ resource "workload-type" "docker-hyperv-ubuntu-18_04" {
   provisionType    = "hyperv"
 }
 
-resource "compute-type-set" "docker-hyperv-ubuntu-18_04-set" {
-  code                      = "docker-hyperv-ubuntu-18.04-set"
+resource "compute-type-set" "docker-hyperv-ubuntu-20_04-set" {
+  code                      = "docker-hyperv-ubuntu-20.04-set"
   name                      = "docker host"
-  containerType            = workload-type.docker-hyperv-ubuntu-18_04
+  containerType            = workload-type.docker-hyperv-ubuntu-20_04
   computeServerType       = "hypervLinux"
   category                  = "ubuntu"
   priorityOrder            = 0
@@ -38,17 +38,17 @@ resource "compute-type-set" "docker-hyperv-ubuntu-18_04-set" {
   installStorageRuntime   = true
 }
 
-resource "compute-type-layout" "docker-hyperv-ubuntu-18_04-single" {
-  code                = "docker-hyperv-ubuntu-18.04-single"
-  name                = "Hyper-V Docker Host"
+resource "compute-type-layout" "docker-hyperv-ubuntu-20_04-single" {
+  code                = "docker-hyperv-ubuntu-20.04-single"
+  name                = "Hyper-V Docker Host Ubuntu 20"
   sortOrder          = 5
-  computeVersion     = "18.04"
+  computeVersion     = "20.04"
   description         = "This will provision a single docker host vm in hyperv"
   type                = "hypervLinux"
   serverCount        = 1
-  memoryRequirement  = (1024l * 1024l * 1024l), //1 gig
+  memoryRequirement  = (1024 * 1024 * 1024),
   hasAutoScale      = true
   groupType          = "docker-cluster"
-  computeServers     = [compute-type-set.docker-hyperv-ubuntu-18_04-set]
+  computeServers     = [compute-type-set.docker-hyperv-ubuntu-20_04-set]
   provisionType      = "hyperv"
 }
