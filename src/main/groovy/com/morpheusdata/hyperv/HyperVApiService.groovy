@@ -444,14 +444,34 @@ class HyperVApiService {
         def results = executeCommand(command, opts)
         log.debug("getServerDisks: ${results}")
         if (results.success == true && results.exitCode == '0') {
-            def diskResults = results.data?.split("\n")
+            def diskResults = results.data?.tokenize('\n')
+            def dataArray = []
+            def dataMap = [:]
             diskResults.each { diskResult ->
-                if (diskResult.length() > 0) {
-                    def diskInfo = parseDiskDetails(diskResult)
-                    if (diskInfo?.success) diskData << diskInfo?.disk
+                def lines = diskResult?.tokenize("\n")
+                lines = lines?.findAll { it.length() > 1 }
+                if (lines?.size() > 0) {
+                    lines.eachWithIndex { line, index ->
+                        if (line.indexOf(":") > -1) {
+                            def lineTokens = line.split(":", 2)
+                            def key = lineTokens[0].trim()
+                            def val = lineTokens[1]?.trim() ?: ""
+                            if (!dataMap.containsKey(key)) {
+                                dataMap[key] = val
+                            } else {
+                                dataArray << dataMap
+                                dataMap = [:]
+                                dataMap[key] = val
+                            }
+                        }
+                    }
                 }
             }
-            rtn.disks = diskData
+            if (!dataMap.isEmpty()) {
+                dataArray << dataMap
+                dataMap = [:]
+            }
+            rtn.disks = dataArray
             rtn.success = true
         }
         log.info("getServerDisks: ${rtn}")
