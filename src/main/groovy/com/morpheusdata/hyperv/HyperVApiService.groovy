@@ -289,7 +289,6 @@ class HyperVApiService {
                 //run it
                 log.info("launchCommand: ${launchCommand}")
                 def out = executeCommand(launchCommand, opts)
-
                 log.debug("run server: ${out}")
                 if (out.success == true) {
                     //we need to fix SecureBoot
@@ -510,7 +509,6 @@ class HyperVApiService {
                         rtn.server = serverDetail.server
                         pending = false
                     } else {
-                        //opts.server.refresh()
                         log.info("check server loading newServer: ip: ${opts.newServer.internalIp}")
                         if (opts.newServer.internalIp) {
                             rtn.success = true
@@ -543,7 +541,6 @@ class HyperVApiService {
                     if (results.success == true && results.exitCode == '0') {
                         log.debug("network data: ${results.data}")
                         def vmNetworkData = parseVmNetworkDetails(results.data)
-
                         //parse it
                         rtn.server = vmData + vmNetworkData
                         rtn.success = true
