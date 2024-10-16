@@ -531,7 +531,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						if (updateProps.maxStorage > existing.maxStorage) {
 							def storageVolumeId = existing.id
 							def volumeId = existing.externalId
-							def diskSize = ComputeUtility.parseGigabytesToBytes(updateProps.size)
+							def diskSize = ComputeUtility.parseGigabytesToBytes(updateProps.size?.toLong())
 							def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${volumeId}"
 							def resizeResults = apiService.resizeDisk(hypervOpts, diskPath, diskSize)
 
@@ -548,7 +548,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 
 					resizeRequest.volumesAdd.each { volumeAdd ->
 						//new disk add it
-						def diskSize = ComputeUtility.parseGigabytesToBytes(volumeAdd.size)
+						def diskSize = ComputeUtility.parseGigabytesToBytes(volumeAdd.size?.toLong())
 						def diskName = getUniqueDataDiskName(computeServer, newCounter++)
 						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
 						def diskResults = apiService.createDisk(hypervOpts, diskPath, diskSize)
@@ -579,7 +579,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						def diskName = volume.externalId
 						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
 
-						def diskConfig = volume.config ?: getDiskConfig(workload, computeServer, volume, isWorkload)
+						def diskConfig = volume.config ?: getDiskConfig(workload, computeServer, volume, hypervOpts)
 						def detachResults = apiService.detachDisk(hypervOpts, vmId, diskConfig.controllerType, diskConfig.controllerNumber, diskConfig.controllerLocation)
 						if (detachResults.success == true) {
 							apiService.deleteDisk(hypervOpts, diskName)
@@ -658,9 +658,8 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		return newVolume
 	}
 
-	def getDiskConfig(Workload workload, ComputeServer server, StorageVolume volume, isWorkload) {
+	def getDiskConfig(ComputeServer server, StorageVolume volume, hypervOpts) {
 		def rtn = [success:true]
-		def hypervOpts = isWorkload ? HypervOptsUtility.getAllHypervWorloadOpts(context, workload) : HypervOptsUtility.getAllHypervServerOpts(context, server)
 		def vmId = server.externalId
 		def diskResults = apiService.getServerDisks(hypervOpts, vmId)
 		if(diskResults?.success == true) {
