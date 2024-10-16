@@ -1,5 +1,6 @@
 package com.morpheusdata.hyperv
 
+import com.bertramlabs.plugins.karman.CloudFile
 import com.morpheusdata.core.MorpheusContext
 import groovy.json.JsonOutput
 import groovy.util.logging.Slf4j
@@ -63,39 +64,30 @@ class HyperVApiService {
 
     def transferImage(opts, cloudFiles, imageName) {
         def rtn = [success: false, results: []]
-        def metadataFile = cloudFiles?.findAll { cloudFile -> cloudFile.name == 'metadata.json' }
-        def vhdFiles = cloudFiles?.findAll { cloudFile -> cloudFile.name.indexOf('.vhd') > -1 || cloudFile.name.indexOf('.vhdx') }
-        log.info("vhdFiles: ${vhdFiles}")
+        CloudFile metadataFile = (CloudFile) cloudFiles?.find { cloudFile -> cloudFile.name == 'metadata.json' }
+        List<CloudFile> vhdFiles = cloudFiles?.findAll { cloudFile -> cloudFile.name.indexOf(".morpkg") == -1 && (cloudFile.name.indexOf('.vhd') > -1 || cloudFile.name.indexOf('.vhdx')) && cloudFile.name.endsWith("/") == false }
         def zoneRoot = opts.zoneRoot ?: defaultRoot
         def imageFolderName = formatImageFolder(imageName)
-        def fileList = []
+        List<Map> fileList = []
         def tgtFolder = "${zoneRoot}\\images\\${imageFolderName}"
         opts.targetImageFolder = tgtFolder
-        def cachePath = opts.cachePath
         def command = "mkdir \"${tgtFolder}\""
         log.debug("command: ${command}")
         def dirResults = executeCommand(command, opts)
 
         if (metadataFile) {
-            def tgtUrl = morpheusContext.services.virtualImage.getCloudFileStreamUrl(opts.image, metadataFile, opts.user, opts.zone)
-            tgtUrl = tgtUrl.replace("https", "http")
-            log.debug("metadata url: ${tgtUrl}")
-            fileList << [inline    : true, action: 'download', content: tgtUrl.bytes.encodeAsBase64(),
-                         targetPath: "${tgtFolder}\\metadata.json".toString()]
+            fileList << [inputStream: metadataFile.inputStream, contentLength: metadataFile.contentLength, targetPath: "${tgtFolder}\\metadata.json".toString(), copyRequestFileName: "metadata.json"]
         }
-        vhdFiles.each { vhdFile ->
-            def tgtFilename = extractImageFileName(vhdFile.name)
-            def tgtUrl = morpheusContext.services.virtualImage.getCloudFileStreamUrl(opts.image, vhdFile, opts.user, opts.zone)
-            log.info("vhd url: ${tgtUrl}")
-            fileList << [inline    : true, action: 'download', content: tgtUrl.bytes.encodeAsBase64(),
-                         targetPath: "${tgtFolder}\\${tgtFilename}".toString()]
+        vhdFiles.each { CloudFile vhdFile ->
+			def imageFileName = extractImageFileName(vhdFile.name)
+            def filename = extractFileName(vhdFile.name)
+            fileList << [inputStream: vhdFile.inputStream, contentLength: vhdFile.getContentLength(), targetPath: "${tgtFolder}\\${imageFileName}".toString(), copyRequestFileName: filename]
         }
-        fileList.each { fileAction ->
-            def filePromise = opts.commandService.sendAction(opts.hypervisor, fileAction, [timeout: 1800000l])
-            def fileResults = filePromise.get(1000l * 60l * 15l)
-            rtn.success = fileResults?.success == true
+        fileList.each { Map fileItem ->
+            Long contentLength = (Long) fileItem.contentLength
+			def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.hypervisor, fileItem.copyRequestFileName, fileItem.targetPath, fileItem.inputStream, contentLength, null, true)
+			rtn.success = fileResults.success
         }
-
         return rtn
     }
 
@@ -264,7 +256,7 @@ class HyperVApiService {
                 def imageFolderName = opts.serverFolder
                 def networkName = opts.network?.name
                 def diskFolder = "${diskRoot}\\${imageFolderName}"
-                def bootDiskName = opts.diskMap?.bootDisk?.fileName ?: 'ubuntu-14_04.vhd'
+                def bootDiskName = opts.diskMap?.bootDisk?.fileName ?: 'morpheus-ubuntu-22_04-amd64-20240604.vhd' //'ubuntu-14_04.vhd'
                 disks.osDisk = [externalId: bootDiskName]
                 def osDiskPath = diskFolder + '\\' + bootDiskName
                 def vmFolder = "${vmRoot}\\${imageFolderName}"
@@ -297,8 +289,6 @@ class HyperVApiService {
                 //run it
                 log.info("launchCommand: ${launchCommand}")
                 def out = executeCommand(launchCommand, opts)
-
-
                 log.debug("run server: ${out}")
                 if (out.success == true) {
                     //we need to fix SecureBoot
@@ -308,6 +298,7 @@ class HyperVApiService {
                     } else {
                         secureBootCommand = "Set-VMFirmware \"${opts.name}\" -EnableSecureBoot Off"
                     }
+
                     executeCommand(secureBootCommand, opts)
                     //if we have to tag it to a VLAN
                     if (opts.networkConfig.primaryInterface.network.vlanId) {
@@ -362,12 +353,11 @@ class HyperVApiService {
                     }
                     enableDynamicMemory(opts)
 
-                    //need to add non boot disks from the diskMap - TODO
                     //cloud init
                     if (opts.cloudConfigBytes) {
-                        def isoAction = [inline: true, action: 'rawfile', content: opts.cloudConfigBytes.encodeAsBase64(), targetPath: "${diskFolder}\\config.iso".toString(), opts: [:]]
-                        def isoPromise = opts.commandService.sendAction(opts.hypervisor, isoAction)
-                        def isoResults = isoPromise.get(1000l * 60l * 3l)
+                        InputStream inputStream = new ByteArrayInputStream(opts.cloudConfigBytes)
+                        def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.hypervisor, "config.iso", "${diskFolder}\\config.iso", inputStream, opts.cloudConfigBytes?.size(), null, true)
+                        log.debug ("clone fileResults: ${fileResults}")
                         if (generation == 2) {
                             createCdrom(opts, opts.name, "${diskFolder}\\config.iso")
                         } else {
@@ -453,14 +443,34 @@ class HyperVApiService {
         def results = executeCommand(command, opts)
         log.debug("getServerDisks: ${results}")
         if (results.success == true && results.exitCode == '0') {
-            def diskResults = results.data?.split("\n")
+            def diskResults = results.data?.tokenize('\n')
+            def dataArray = []
+            def dataMap = [:]
             diskResults.each { diskResult ->
-                if (diskResult.length() > 0) {
-                    def diskInfo = parseDiskDetails(diskResult)
-                    if (diskInfo?.success) diskData << diskInfo?.disk
+                def lines = diskResult?.tokenize("\n")
+                lines = lines?.findAll { it.length() > 1 }
+                if (lines?.size() > 0) {
+                    lines.eachWithIndex { line, index ->
+                        if (line.indexOf(":") > -1) {
+                            def lineTokens = line.split(":", 2)
+                            def key = lineTokens[0].trim()
+                            def val = lineTokens[1]?.trim() ?: ""
+                            if (!dataMap.containsKey(key)) {
+                                dataMap[key] = val
+                            } else {
+                                dataArray << dataMap
+                                dataMap = [:]
+                                dataMap[key] = val
+                            }
+                        }
+                    }
                 }
             }
-            rtn.disks = diskData
+            if (!dataMap.isEmpty()) {
+                dataArray << dataMap
+                dataMap = [:]
+            }
+            rtn.disks = dataArray
             rtn.success = true
         }
         log.info("getServerDisks: ${rtn}")
@@ -492,18 +502,18 @@ class HyperVApiService {
             while (pending) {
                 sleep(1000l * 5l)
                 def serverDetail = getServerDetails(opts, vmId)
+                log.debug("checkServerReady: serverDetail: ${serverDetail}")
                 if (serverDetail.success == true) {
                     if (serverDetail.server.ipAddress) {
                         rtn.success = true
                         rtn.server = serverDetail.server
                         pending = false
                     } else {
-                        opts.server.refresh()
-                        log.debug("check server loading server: ip: ${opts.server.internalIp}")
-                        if (opts.server.internalIp) {
+                        log.info("check server loading newServer: ip: ${opts.newServer.internalIp}")
+                        if (opts.newServer.internalIp) {
                             rtn.success = true
                             rtn.server = serverDetail.server
-                            rtn.server.ipAddress = opts.server.internalIp
+                            rtn.server.ipAddress = opts.newServer.internalIp
                             pending = false
                         }
                     }
@@ -1134,11 +1144,16 @@ class HyperVApiService {
         executeCommand(startVM, opts)
     }
 
+	def extractFileName(imageName) {
+		def rtn = imageName
+		def lastIndex = imageName?.lastIndexOf('/')
+		if (lastIndex > -1)
+			rtn = imageName.substring(lastIndex + 1)
+		return rtn
+	}
+
     def extractImageFileName(imageName) {
-        def rtn = imageName
-        def lastIndex = imageName?.lastIndexOf('/')
-        if (lastIndex > -1)
-            rtn = imageName.substring(lastIndex + 1)
+        def rtn = extractFileName(imageName)
         if (rtn.indexOf('.tar.gz') > -1)
             rtn = rtn.replaceAll('.tar.gz', '')
         if (rtn.indexOf('.gz') > -1)
@@ -1149,5 +1164,6 @@ class HyperVApiService {
     def formatImageFolder(imageName) {
         def rtn = imageName
         rtn = rtn.replaceAll(' ', '_')
+        rtn = rtn.replaceAll('\\.', '_')
     }
 }

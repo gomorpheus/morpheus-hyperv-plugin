@@ -52,6 +52,9 @@ dependencies {
 	implementation "org.slf4j:slf4j-api:$slf4jVersion"
 	implementation "org.slf4j:slf4j-parent:$slf4jVersion"
 	implementation 'commons-net:commons-net:3.6'
+	implementation("com.bertramlabs.plugins:karman-core:${karmanVersion}") {
+		exclude module: 'groovy-all'
+	}
 
 	// Include morpheus-core and it's dependencies
 	testImplementation 'io.reactivex.rxjava3:rxjava:3.1.7'

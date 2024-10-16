@@ -39,7 +39,8 @@ class HypervOptsUtility {
     }
 
     static getAllHypervWorloadOpts(MorpheusContext context, workload) {
-        def rtn = getHypervZoneOpts(context, workload.server.cloud)
+        def server = context.services.computeServer.get(workload.server?.id)
+        def rtn = getHypervZoneOpts(context, server?.cloud)
         if(workload.server.parentServer) {
             rtn += getHypervHypervisorOpts(workload.server.parentServer)
         }
@@ -48,7 +49,6 @@ class HypervOptsUtility {
     }
 
     static getHypervWorkloadOpts(MorpheusContext context, Workload container) {
-        def zoneConfig = container.server.cloud.getConfigMap()
         def serverConfig = container.server.getConfigMap()
         def containerConfig = container.getConfigMap()
         def network = context.services.network.get(containerConfig.networkId?.toLong())
@@ -64,16 +64,16 @@ class HypervOptsUtility {
         def platform = (container.server.serverOs?.platform == 'windows' || container.server.osType == 'windows') ? 'windows' : 'linux'
         return [config:serverConfig, vmId: container.server.externalId, name: container.server.externalId, server:container.server, memory:maxMemory,
                 maxCpu:maxCpu, maxCores:maxCores, serverFolder:serverFolder, hostname:container.server.getExternalHostname(), network:network, platform:platform]
-//                osDiskSize:maxStorage, dataDisks:dataDisks, maxTotalStorage:maxTotalStorage]
     }
 
     static getHypervZoneOpts(MorpheusContext context, zone) {
-        def zoneConfig = zone.getConfigMap()
-        def keyPair = context.services.keyPair.find(new DataQuery().withFilter("accountId", zone.account.id))
+        def zoneConfig = zone?.getConfigMap()
+        def keyPair = context.services.keyPair.find(new DataQuery().withFilter("accountId", zone?.account?.id))
 
-        return [account:zone.account, zoneConfig:zoneConfig, zone:zone, publicKey:keyPair?.publicKey, privateKey:keyPair?.privateKey]
+        return [account:zone?.account, zoneConfig:zoneConfig, zone:zone, publicKey:keyPair?.publicKey, privateKey:keyPair?.privateKey]
         // TODO: below line is commented for now, need to work on this if its needed.
 //        rpcService:rpcService, commandService:commandService]
+       // check: commandService
     }
 
     static getHypervHypervisorOpts(hypervisor) {
