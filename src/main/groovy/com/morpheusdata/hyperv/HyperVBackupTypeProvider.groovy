@@ -19,11 +19,15 @@ import groovy.util.logging.Slf4j
 @Slf4j
 class HyperVBackupTypeProvider extends AbstractBackupTypeProvider {
 
-	BackupExecutionProvider executionProvider;
-	BackupRestoreProvider restoreProvider;
+	BackupExecutionProvider executionProvider
+	BackupRestoreProvider restoreProvider
+	MorpheusContext morpheusContext
+	HyperVPlugin plugin
 
-	HyperVBackupTypeProvider(Plugin plugin, MorpheusContext morpheusContext) {
+	HyperVBackupTypeProvider(HyperVPlugin plugin, MorpheusContext morpheusContext) {
 		super(plugin, morpheusContext)
+		this.plugin = plugin
+		this.morpheusContext = morpheusContext
 	}
 
 	/**
@@ -152,7 +156,7 @@ class HyperVBackupTypeProvider extends AbstractBackupTypeProvider {
 	@Override
 	HyperVBackupExecutionProvider getExecutionProvider() {
 		if(!this.executionProvider) {
-			this.executionProvider = new HyperVBackupExecutionProvider(getPlugin())
+			this.executionProvider = new HyperVBackupExecutionProvider(plugin, morpheusContext)
 		}
 		return this.executionProvider
 	}
