@@ -4,6 +4,7 @@ import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.BackupExecutionProvider
 import com.morpheusdata.core.backup.response.BackupExecutionResponse
 import com.morpheusdata.core.backup.util.BackupResultUtility
+import com.morpheusdata.core.util.DateUtility
 import com.morpheusdata.hyperv.utils.HypervOptsUtility
 import com.morpheusdata.model.Backup
 import com.morpheusdata.model.BackupResult
@@ -24,7 +25,7 @@ class HyperVBackupExecutionProvider implements BackupExecutionProvider {
 		this.morpheusContext = morpheusContext
 		this.apiService = new HyperVApiService(morpheusContext)
 	}
-	
+
 	/**
 	 * Returns the Morpheus Context for interacting with data stored in the Main Morpheus Application
 	 * @return an implementation of the MorpheusContext for running Future based rxJava queries
@@ -195,6 +196,7 @@ class HyperVBackupExecutionProvider implements BackupExecutionProvider {
 			def snapshotName = "${computeServer.externalId}.${System.currentTimeMillis()}".toString()
 			def outputPath = executionConfig.workingPath
 			log.debug("outputPath: ${outputPath}")
+			rtn.data.backupResult.status = BackupResult.Status.IN_PROGRESS
 			def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(morpheusContext, container)
 			def hypervisorId = computeServer?.parentServer?.id
 			hypervOpts.snapshotId = snapshotName
@@ -202,23 +204,32 @@ class HyperVBackupExecutionProvider implements BackupExecutionProvider {
 			def snapshotResults = apiService.snapshotServer(hypervOpts, vmId)
 			log.debug("backup complete: {}", snapshotResults)
 			if (snapshotResults.success) {
-				rtn.data.backupResult.backupSetId = executionConfig.backupResultId ?: BackupResultUtility.generateBackupResultSetId()
+				rtn.data.backupResult.backupSetId = opts.backupSetId
 				rtn.data.backupResult.executorIpAddress = executionConfig.ipAddress
 				rtn.data.backupResult.resultBase = 'hyperv'
 				rtn.data.backupResult.resultBucket = snapshotResults.snapshotId
 				rtn.data.backupResult.resultPath = snapshotResults.snapshotId
 				rtn.data.backupResult.resultArchive = snapshotResults.snapshotId
 				rtn.data.backupResult.sizeInMb = 0l
-				rtn.data.backupResult.status = BackupResult.Status.IN_PROGRESS
 				rtn.data.backupResult.snapshotId = snapshotResults.snapshotId
-				rtn.data.backupResult.snapshotId = snapshotResults.snapshotId
-				rtn.data.backupResult.zoneId = cloud.id
+				rtn.data.backupResult.setConfigProperty("snapshotId", snapshotResults.snapshotId)
 				rtn.data.backupResult.setConfigProperty("vmId", vmId)
+				rtn.data.backupResult.setConfigProperty("zoneId", cloud.id)
 				rtn.data.backupResult.setConfigProperty("hypervisorId", hypervisorId)
 				rtn.data.updates = true
+				rtn.data.backupResult.status = BackupResult.Status.SUCCEEDED
+				if (!backupResult.endDate) {
+					rtn.data.backupResult.endDate = new Date()
+					def startDate = backupResult.startDate
+					if (startDate) {
+						def start = DateUtility.parseDate(startDate)
+						def end = rtn.data.backupResult.endDate
+						rtn.data.backupResult.durationMillis = end.time - start.time
+					}
+				}
 			} else {
 				//error
-				rtn.data.backupResult.backupSetId = executionConfig.backupResultId ?: BackupResultUtility.generateBackupResultSetId()
+				rtn.data.backupResult.backupSetId = opts.backupSetId
 				rtn.data.backupResult.executorIpAddress = executionConfig.ipAddress
 				rtn.data.backupResult.sizeInMb = 0l
 				rtn.data.backupResult.status = BackupResult.Status.FAILED
@@ -252,7 +263,7 @@ class HyperVBackupExecutionProvider implements BackupExecutionProvider {
 	ServiceResponse<BackupExecutionResponse> refreshBackupResult(BackupResult backupResult) {
 		return ServiceResponse.success(new BackupExecutionResponse(backupResult))
 	}
-	
+
 	/**
 	 * Cancel the backup execution process without waiting for a result.
 	 * @param backupResultModel the details associated with the results of the backup execution.
