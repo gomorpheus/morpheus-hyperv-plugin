@@ -51,6 +51,7 @@ class VhdUtility {
             // Get the disk type to determine if the proper headers are in the VHD (may not be needed)
             // get the offset relative to the current offset
             currentOffset = (VHD_DISK_TYPE_OFFSET - totalOffset)
+
             totalOffset += currentOffset + VHD_DISK_TYPE_LENGTH
             // // Read disk type
             int diskType = getHeaderValueInt(bufferedStream, currentOffset, VHD_DISK_TYPE_LENGTH)

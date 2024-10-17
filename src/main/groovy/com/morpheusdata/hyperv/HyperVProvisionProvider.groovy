@@ -1,15 +1,18 @@
 package com.morpheusdata.hyperv
 
-
+import com.morpheusdata.PrepareHostResponse
 import com.morpheusdata.core.AbstractProvisionProvider
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.data.DataQuery
+import com.morpheusdata.core.providers.HostProvisionProvider
+import com.morpheusdata.core.util.NetworkUtility
 import com.morpheusdata.core.providers.ProvisionProvider
 import com.morpheusdata.core.providers.WorkloadProvisionProvider
 import com.morpheusdata.core.util.ComputeUtility
 import com.morpheusdata.hyperv.utils.HypervOptsUtility
 import com.morpheusdata.model.*
+import com.morpheusdata.model.provisioning.HostRequest
 import com.morpheusdata.model.provisioning.WorkloadRequest
 import com.morpheusdata.request.ResizeRequest
 import com.morpheusdata.response.InitializeHypervisorResponse
@@ -19,7 +22,7 @@ import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
 
 @Slf4j
-class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, ProvisionProvider.HypervisorProvisionFacet, ProvisionProvider.BlockDeviceNameFacet, WorkloadProvisionProvider.ResizeFacet {
+class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, HostProvisionProvider, ProvisionProvider.HypervisorProvisionFacet, ProvisionProvider.BlockDeviceNameFacet, WorkloadProvisionProvider.ResizeFacet {
 	public static final String PROVIDER_CODE = 'hyperv.provision'
 	public static final String PROVISION_TYPE_CODE = 'hyperv'
 	public static final diskNames = ['sda', 'sdb', 'sdc', 'sdd', 'sde', 'sdf', 'sdg', 'sdh', 'sdi', 'sdj', 'sdk', 'sdl']
@@ -1068,6 +1071,36 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		return diskNames
 	}
 
+	@Override
+	ServiceResponse validateHost(ComputeServer server, Map opts=[:]) {
+		log.debug("validateServiceConfiguration:$opts")
+		def rtn =  ServiceResponse.success()
+		try {
+			def cloudId = server?.cloud?.id ?: opts.siteZoneId
+			def cloud = cloudId ? context.services.cloud.get(cloudId?.toLong()) : null
+			if(server.computeServerType?.vmHypervisor == true) {
+				rtn =  ServiceResponse.success()
+			} else {
+				def validationOpts = [
+						networkInterfaces: opts?.networkInterfaces
+				]
+				if(opts?.config?.containsKey('hypervHostId')){
+					validationOpts.hostId = opts.config.hypervHostId
+				}
+				if(opts?.config?.containsKey('nodeCount')){
+					validationOpts.nodeCount = opts.config.nodeCount
+				}
+				def validationResults = apiService.validateServerConfig(validationOpts)
+				if(!validationResults.success) {
+					rtn.success = false
+					rtn.errors += validationResults.errors
+				}
+			}
+		} catch(e) {
+			log.error("error in validateServerConfig:${e.message}", e)
+		}
+		return rtn
+	}
 	/**
 	 * Request to scale the size of the Workload. Most likely, the implementation will follow that of resizeServer
 	 * as the Workload usually references a ComputeServer. It is up to implementations to create the volumes, set the memory, etc
@@ -1142,7 +1175,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						if (updateProps.maxStorage > existing.maxStorage) {
 							def storageVolumeId = existing.id
 							def volumeId = existing.externalId
-							def diskSize = ComputeUtility.parseGigabytesToBytes(updateProps.size)
+							def diskSize = ComputeUtility.parseGigabytesToBytes(updateProps.size?.toLong())
 							def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${volumeId}"
 							def resizeResults = apiService.resizeDisk(hypervOpts, diskPath, diskSize)
 							if (resizeResults.success == true) {
@@ -1158,7 +1191,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 
 					resizeRequest.volumesAdd.each { volumeAdd ->
 						//new disk add it
-						def diskSize = ComputeUtility.parseGigabytesToBytes(volumeAdd.size)
+						def diskSize = ComputeUtility.parseGigabytesToBytes(volumeAdd.size?.toLong())
 						def diskName = getUniqueDataDiskName(computeServer, newCounter++)
 						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
 						def diskResults = apiService.createDisk(hypervOpts, diskPath, diskSize)
@@ -1187,8 +1220,9 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						log.debug "Deleting volume : ${volume.externalId}"
 						def diskName = volume.externalId
 						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
-						def diskConfig = volume.config ?: getDiskConfig(workload, computeServer, volume)
-						def detachResults = apiService.detachDisk(hypervOpts, vmId, diskConfig.controllerType, diskConfig.controllerNumber, diskConfig.controllerLocation)
+						def diskConfig = volume.config ?: getDiskConfig(workload, computeServer, volume, hypervOpts)
+						def detachResults = apiService.detachDisk(hypervOpts, vmId, diskConfig.ControllerType, diskConfig.ControllerNumber, diskConfig.ControllerLocation)
+						log.debug ("detachResults.success: ${detachResults.success}")
 						if (detachResults.success == true) {
 							apiService.deleteDisk(hypervOpts, diskName)
 							context.async.storageVolume.remove([volume], computeServer, true).blockingGet()
@@ -1234,6 +1268,252 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		return updatedServer ?: server
 	}
 
+	@Override
+	ServiceResponse<PrepareHostResponse> prepareHost(ComputeServer server, HostRequest hostRequest, Map opts) {
+		log.debug "prepareHost: ${server} ${hostRequest} ${opts}"
+
+		def prepareResponse = new PrepareHostResponse(computeServer: server, disableCloudInit: false, options: [sendIp: true])
+		ServiceResponse<PrepareHostResponse> rtn = ServiceResponse.prepare(prepareResponse)
+
+		try {
+			VirtualImage virtualImage
+			Long computeTypeSetId = server.typeSet?.id
+			if(computeTypeSetId) {
+				ComputeTypeSet computeTypeSet = morpheus.async.computeTypeSet.get(computeTypeSetId).blockingGet()
+				if(computeTypeSet.workloadType) {
+					WorkloadType workloadType = morpheus.async.workloadType.get(computeTypeSet.workloadType.id).blockingGet()
+					virtualImage = workloadType.virtualImage
+				}
+			}
+			if(!virtualImage) {
+				rtn.msg = "No virtual image selected"
+			} else {
+				server.sourceImage = virtualImage
+				saveAndGet(server)
+				rtn.success = true
+			}
+		} catch(e) {
+			rtn.msg = "Error in prepareHost: ${e}"
+			log.error("${rtn.msg}, ${e}", e)
+
+		}
+		return rtn
+	}
+
+	@Override
+	ServiceResponse<ProvisionResponse> runHost(ComputeServer server, HostRequest hostRequest, Map opts) {
+		log.debug("runHost: ${server} ${hostRequest} ${opts}")
+		ProvisionResponse provisionResponse = new ProvisionResponse()
+		try {
+			def config = server.getConfigMap()
+			Cloud cloud = server.cloud
+			def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, cloud)
+			def imageType = config.templateTypeSelect ?: 'default'
+			def imageId
+			def virtualImage
+			def node = config.hostId ? context.services.computeServer.get(config.hostId.toLong()) : pickHypervHypervisor(cloud)
+			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
+			def layout = server.layout
+			def typeSet = server.typeSet
+			if(layout && typeSet) {
+				virtualImage = typeSet.workloadType.virtualImage
+				imageId = virtualImage.externalId
+			} else if(imageType == 'custom' && config.template) {
+				def virtualImageId = config.template?.toLong()
+				virtualImage = morpheus.services.virtualImage.get(virtualImageId)
+				imageId = virtualImage.externalId
+			} else {
+				virtualImage = new VirtualImage(code: 'hyperv.image.morpheus.ubuntu.16.04.3-v1.ubuntu.16.04.3.amd64') //better this later
+			}
+
+			if(!imageId) { //If its userUploaded and still needs uploaded
+				def cloudFiles = context.async.virtualImage.getVirtualImageFiles(virtualImage).blockingGet()
+
+				def containerImage = [
+						name			: virtualImage.name ?: typeSet.workloadType.imageCode,
+						minDisk			: 5,
+						minRam			: 512l * ComputeUtility.ONE_MEGABYTE,
+						virtualImageId	: virtualImage.id,
+						tags			: 'morpheus, ubuntu',
+						imageType		: 'vhd',
+						containerType	: 'vhd',
+						cloudFiles		: cloudFiles,
+				]
+
+				hypervOpts.image = containerImage
+				hypervOpts.userId = server.createdBy?.id
+				hypervOpts.user = server.createdBy
+				hypervOpts.virtualImage = virtualImage
+
+				log.debug "hypervOpts:${hypervOpts}"
+				def imageResults = apiService.insertContainerImage(hypervOpts)
+				if(imageResults.success == true) {
+					imageId = imageResults.imageId
+				}
+			}
+
+			if(imageId) {
+				server.sourceImage = virtualImage
+				server.serverOs = server.serverOs ?: virtualImage.osType
+				server.osType = (virtualImage.osType?.platform == 'windows' ? 'windows' :'linux') ?: virtualImage.platform
+				hypervOpts.secureBoot = virtualImage?.uefi ?: false
+				hypervOpts.imageId = imageId
+				hypervOpts.diskMap = context.services.virtualImage.getImageDiskMap(virtualImage)
+				server = saveAndGetMorpheusServer(server, true)
+				hypervOpts += HypervOptsUtility.getHypervServerOpts(context, server)
+
+				hypervOpts.networkConfig = hostRequest.networkConfiguration
+				hypervOpts.cloudConfigUser = hostRequest.cloudConfigUser
+				hypervOpts.cloudConfigMeta = hostRequest.cloudConfigMeta
+				hypervOpts.cloudConfigNetwork = hostRequest.cloudConfigNetwork
+				hypervOpts.isSysprep = virtualImage?.isSysprep
+
+				def isoBuffer = context.services.provision.buildIsoOutputStream(
+						hypervOpts.isSysprep, PlatformType.valueOf(server.osType), hypervOpts.cloudConfigMeta, hypervOpts.cloudConfigUser, hypervOpts.cloudConfigNetwork)
+
+				hypervOpts.cloudConfigBytes = isoBuffer
+				server.cloudConfigUser = hypervOpts.cloudConfigUser
+				server.cloudConfigMeta = hypervOpts.cloudConfigMeta
+
+				//save the server
+				server = saveAndGetMorpheusServer(server, true)
+				hypervOpts.newServer = server
+
+				//create it in hyperv
+				def createResults = apiService.cloneServer(hypervOpts)
+				log.debug("create server results:${createResults}")
+				if(createResults.success == true) {
+					def instance = createResults.server
+					if(instance) {
+						server.externalId = instance.id
+						server.parentServer = node
+						server = saveAndGetMorpheusServer(server, true)
+
+						def serverDetails = apiService.getServerDetails(hypervOpts, server.externalId)
+						if(serverDetails.success == true) {
+							//fill in ip address.
+							def newIpAddress = serverDetails.server?.ipAddress ?: createResults.server?.ipAddress
+							def macAddress = serverDetails.server?.macAddress
+							opts.network = applyComputeServerNetworkIp(server, newIpAddress, newIpAddress, 0, macAddress)
+							server = getMorpheusServer(server.id)
+							server.osDevice = '/dev/sda'
+							server.dataDevice = '/dev/sdb'
+							server.managed = true
+
+							server.capacityInfo = new ComputeCapacityInfo(maxCores:hypervOpts.maxCores, maxMemory:hypervOpts.memory, maxStorage:hypervOpts.maxTotalStorage)
+							context.async.computeServer.save(server).blockingGet()
+							provisionResponse.success = true
+						} else {
+							//no server detail
+							server.statusMessage = 'Error loading server details'
+						}
+					} else {
+						//no reservation
+						server.statusMessage = 'Error loading created server'
+					}
+				} else {
+					if(createResults.server?.id) {
+						// we did create a vm though so we need to bind it to the server
+						server.externalId = createResults.server.id
+						context.async.computeServer.save(server).blockingGet()
+					}
+					server.statusMessage = 'Error creating server'
+					//tell someone :)
+				}
+			} else {
+				server.statusMessage = 'Error creating server'
+			}
+			if(provisionResponse.success != true) {
+				return new ServiceResponse(success: false, msg: provisionResponse.message ?: 'vm config error', error: provisionResponse.message, data: provisionResponse)
+			} else {
+				return new ServiceResponse<ProvisionResponse>(success: true, data: provisionResponse)
+			}
+
+		} catch(Exception e) {
+			log.error("Error in runHost method: ${e.message}", e)
+			provisionResponse.setError(e.message)
+			return new ServiceResponse(success: false, msg: e.message, error: e.message, data: provisionResponse)
+		}
+	}
+
+	@Override
+	ServiceResponse<ProvisionResponse> waitForHost(ComputeServer server){
+		log.debug("waitForHost: ${server}")
+		def provisionResponse = new ProvisionResponse()
+		ServiceResponse<ProvisionResponse> rtn = ServiceResponse.prepare(provisionResponse)
+		try {
+			def config = server.getConfigMap()
+			def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, server.cloud)
+			def node = config.hostId ? context.services.computeServer.get(config.hostId.toLong()) : pickHypervHypervisor(server.cloud)
+			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
+			def serverDetail = apiService.checkServerReady(hypervOpts, server.externalId)
+			if (serverDetail.success == true) {
+				provisionResponse.privateIp = serverDetail.ipAddress
+				provisionResponse.publicIp = serverDetail.ipAddress
+				provisionResponse.externalId = server.externalId
+				def finalizeResults = finalizeHost(server)
+				if(finalizeResults.success == true) {
+					provisionResponse.success = true
+					rtn.success = true
+				}
+			}
+		} catch (e){
+			log.error("Error waitForHost: ${e.message}", e)
+			rtn.success = false
+			rtn.msg = "Error in waiting for Host: ${e}"
+		}
+		return rtn
+	}
+
+	def isValidIpv6Address(String address) {
+		// validate the ipv6 address is an ipv6 address. There is no separate validation for ipv6 addresses, so validate that its not an ipv4 address and it is a valid ip address
+		return address && NetworkUtility.validateIpAddr(address, false) == false && NetworkUtility.validateIpAddr(address, true) == true
+	}
+
+	@Override
+	ServiceResponse finalizeHost(ComputeServer server) {
+		ServiceResponse rtn = ServiceResponse.prepare()
+		log.debug("finalizeHost: ${server?.id}")
+		try {
+			def config = server.getConfigMap()
+			def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, server.cloud)
+			def node = config.hostId ? context.services.computeServer.get(config.hostId.toLong()) : pickHypervHypervisor(server.cloud)
+			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
+			def serverDetail = apiService.checkServerReady(hypervOpts, server.externalId)
+			if (serverDetail.success == true){
+				serverDetail.ipAddresses.each { interfaceName, data ->
+					ComputeServerInterface netInterface = server.interfaces?.find{it.name == interfaceName}
+					if(netInterface) {
+						if(data.ipAddress) {
+							def address = new NetAddress(address: data.ipAddress, type: NetAddress.AddressType.IPV4)
+							if(!NetworkUtility.validateIpAddr(address.address)){
+								log.debug("NetAddress Errors: ${address}")
+							}
+							netInterface.addresses << address
+							netInterface.publicIpAddress = data.ipAddress
+						}
+						if(data.ipv6Address && isValidIpv6Address(data.ipv6Address)) {
+							def address = new NetAddress(address: data.ipv6Address, type: NetAddress.AddressType.IPV6)
+							netInterface.addresses << address
+							netInterface.publicIpv6Address = data.ipv6Address
+						}
+						context.async.computeServer.computeServerInterface.save([netInterface]).blockingGet()
+					}
+				}
+				def newIpAddress = serverDetail.server?.ipAddress
+				def macAddress = serverDetail.server?.macAddress
+				applyComputeServerNetworkIp(server, newIpAddress, newIpAddress, 0, macAddress)
+				context.async.computeServer.save(server).blockingGet()
+				rtn.success = true
+			}
+		} catch (e){
+			rtn.success = false
+			rtn.msg = "Error in finalizing server: ${e.message}"
+			log.error("Error in finalizeHost: ${e.message}", e)
+		}
+		return rtn
+	}
+
 	def getUniqueDataDiskName(ComputeServer server, index = 1) {
 		def nameExists = true
 		def volumes = server.volumes
@@ -1267,14 +1547,14 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		return newVolume
 	}
 
-	def getDiskConfig(Workload workload, ComputeServer server, StorageVolume volume) {
+	def getDiskConfig(Workload workload, ComputeServer server, StorageVolume volume, hypervOpts) {
 		def rtn = [success: true]
-		def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(context, workload)
+		//def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(context, workload)
 		def vmId = server.externalId
 		def diskResults = apiService.getServerDisks(hypervOpts, vmId)
 		if (diskResults?.success == true) {
 			def diskName = volume.externalId
-			def diskData = diskResults?.disks?.find { it.path.contains("${diskName}") }
+			def diskData = diskResults?.disks?.find { it.Path.contains("${diskName}") }
 			if (diskData) {
 				rtn += diskData
 			}

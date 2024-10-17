@@ -49,7 +49,6 @@ class HypervOptsUtility {
     }
 
     static getHypervWorkloadOpts(MorpheusContext context, Workload container) {
-        def zoneConfig = container.server.cloud.getConfigMap()
         def serverConfig = container.server.getConfigMap()
         def containerConfig = container.getConfigMap()
         def network = context.services.network.get(containerConfig.networkId?.toLong())
@@ -71,7 +70,7 @@ class HypervOptsUtility {
         def zoneConfig = zone?.getConfigMap()
         def keyPair = context.services.keyPair.find(new DataQuery().withFilter("accountId", zone?.account?.id))
 
-        return [account:zone.account, zoneConfig:zoneConfig, zone:zone, publicKey:keyPair?.publicKey, privateKey:keyPair?.privateKey]
+        return [account:zone?.account, zoneConfig:zoneConfig, zone:zone, publicKey:keyPair?.publicKey, privateKey:keyPair?.privateKey]
         // TODO: below line is commented for now, need to work on this if its needed.
 //        rpcService:rpcService, commandService:commandService]
        // check: commandService
