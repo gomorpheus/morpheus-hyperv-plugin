@@ -1175,7 +1175,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						if (updateProps.maxStorage > existing.maxStorage) {
 							def storageVolumeId = existing.id
 							def volumeId = existing.externalId
-							def diskSize = ComputeUtility.parseGigabytesToBytes(updateProps.size)
+							def diskSize = ComputeUtility.parseGigabytesToBytes(updateProps.size?.toLong())
 							def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${volumeId}"
 							def resizeResults = apiService.resizeDisk(hypervOpts, diskPath, diskSize)
 							if (resizeResults.success == true) {
@@ -1191,7 +1191,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 
 					resizeRequest.volumesAdd.each { volumeAdd ->
 						//new disk add it
-						def diskSize = ComputeUtility.parseGigabytesToBytes(volumeAdd.size)
+						def diskSize = ComputeUtility.parseGigabytesToBytes(volumeAdd.size?.toLong())
 						def diskName = getUniqueDataDiskName(computeServer, newCounter++)
 						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
 						def diskResults = apiService.createDisk(hypervOpts, diskPath, diskSize)
@@ -1220,8 +1220,9 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						log.debug "Deleting volume : ${volume.externalId}"
 						def diskName = volume.externalId
 						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
-						def diskConfig = volume.config ?: getDiskConfig(workload, computeServer, volume)
-						def detachResults = apiService.detachDisk(hypervOpts, vmId, diskConfig.controllerType, diskConfig.controllerNumber, diskConfig.controllerLocation)
+						def diskConfig = volume.config ?: getDiskConfig(workload, computeServer, volume, hypervOpts)
+						def detachResults = apiService.detachDisk(hypervOpts, vmId, diskConfig.ControllerType, diskConfig.ControllerNumber, diskConfig.ControllerLocation)
+						log.debug ("detachResults.success: ${detachResults.success}")
 						if (detachResults.success == true) {
 							apiService.deleteDisk(hypervOpts, diskName)
 							context.async.storageVolume.remove([volume], computeServer, true).blockingGet()
@@ -1546,14 +1547,14 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		return newVolume
 	}
 
-	def getDiskConfig(Workload workload, ComputeServer server, StorageVolume volume) {
+	def getDiskConfig(Workload workload, ComputeServer server, StorageVolume volume, hypervOpts) {
 		def rtn = [success: true]
-		def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(context, workload)
+		//def hypervOpts = HypervOptsUtility.getAllHypervWorloadOpts(context, workload)
 		def vmId = server.externalId
 		def diskResults = apiService.getServerDisks(hypervOpts, vmId)
 		if (diskResults?.success == true) {
 			def diskName = volume.externalId
-			def diskData = diskResults?.disks?.find { it.path.contains("${diskName}") }
+			def diskData = diskResults?.disks?.find { it.Path.contains("${diskName}") }
 			if (diskData) {
 				rtn += diskData
 			}
