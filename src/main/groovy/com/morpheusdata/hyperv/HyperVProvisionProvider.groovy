@@ -23,9 +23,7 @@ import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
 
 @Slf4j
-class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, ProvisionProvider.HypervisorProvisionFacet, HostProvisionProvider.ResizeFacet, WorkloadProvisionProvider.ResizeFacet, ProvisionProvider.BlockDeviceNameFacet {
-
-//class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, HostProvisionProvider, ProvisionProvider.HypervisorProvisionFacet, ProvisionProvider.BlockDeviceNameFacet, WorkloadProvisionProvider.ResizeFacet {
+class HyperVProvisionProvider extends AbstractProvisionProvider implements WorkloadProvisionProvider, HostProvisionProvider, ProvisionProvider.HypervisorProvisionFacet, HostProvisionProvider.ResizeFacet, WorkloadProvisionProvider.ResizeFacet, ProvisionProvider.BlockDeviceNameFacet {
 	public static final String PROVIDER_CODE = 'hyperv.provision'
 	public static final String PROVISION_TYPE_CODE = 'hyperv'
 	public static final diskNames = ['sda', 'sdb', 'sdc', 'sdd', 'sde', 'sdf', 'sdg', 'sdh', 'sdi', 'sdj', 'sdk', 'sdl']
@@ -1125,9 +1123,10 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	}
 
 	@Override
-	ServiceResponse resizeServer(ComputeServer computeServer, ResizeRequest resizeRequest, Map map) {
+	ServiceResponse resizeServer(ComputeServer computeServer, ResizeRequest resizeRequest, Map opts) {
 		log.info("resizeServer calling resizeWorkloadAndServer")
 		return resizeWorkloadAndServer(null, computeServer, resizeRequest, opts, false)
+		log.info("RAZI :: resizeWorkloadAndServer called SUCCESS")
 	}
 
 	private ServiceResponse resizeWorkloadAndServer(Workload workload, ComputeServer server, ResizeRequest resizeRequest, Map opts, Boolean isWorkload) {
@@ -1142,9 +1141,12 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 
 			def requestedMemory = resizeRequest.maxMemory
 			def requestedCores = resizeRequest?.maxCores
+			log.info("RAZI :: requestedMemory: ${requestedMemory}")
+			log.info("RAZI :: requestedCores: ${requestedCores}")
 
 			def currentMemory
 			def currentCores
+			log.info("RAZI :: isWorkload: ${isWorkload}")
 			if (isWorkload) {
 				currentMemory = workload.maxMemory ?: workload.getConfigProperty('maxMemory')?.toLong()
 				currentCores = workload.maxCores ?: 1
@@ -1152,12 +1154,19 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				currentMemory = computeServer.maxMemory ?: computeServer.getConfigProperty('maxMemory')?.toLong()
 				currentCores = server.maxCores ?: 1
 			}
+			log.info("RAZI :: currentMemory: ${currentMemory}")
+			log.info("RAZI :: currentMemory: ${currentMemory}")
 			def neededMemory = requestedMemory - currentMemory
 			def neededCores = (requestedCores ?: 1) - (currentCores ?: 1)
+			log.info("RAZI :: neededMemory: ${neededMemory}")
+			log.info("RAZI :: neededCores: ${neededCores}")
 
 			def vmId = computeServer.externalId
+			log.info("RAZI :: vmId: ${vmId}")
 			def hypervOpts = isWorkload ? HypervOptsUtility.getAllHypervWorloadOpts(context, workload) : HypervOptsUtility.getAllHypervServerOpts(context, computeServer)
+			log.info("RAZI :: hypervOpts: ${hypervOpts}")
 			def stopResults = isWorkload ? stopWorkload(workload) : stopServer(computeServer)
+			log.info("RAZI :: stopResults: ${stopResults}")
 			if (stopResults.success == true) {
 				if (neededMemory != 0 || neededCores != 0) {
 					def resizeOpts = [:]
@@ -1165,7 +1174,9 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						resizeOpts.maxMemory = requestedMemory
 					if (neededCores != 0)
 						resizeOpts.maxCores = requestedCores
+					log.info("RAZI :: resizeOpts: ${resizeOpts}")
 					def resizeResults = apiService.updateServer(hypervOpts, vmId, resizeOpts)
+					log.info("RAZI :: resizeResults: ${resizeResults}")
 					log.debug("resize results: ${resizeResults}")
 					if (resizeResults.success == true) {
 						//computeServer.plan = plan
@@ -1184,8 +1195,11 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					log.debug "Same plan.. not updating"
 				}
 
+				log.info("RAZI :: opts.volumes: ${opts.volumes}")
 				if (opts.volumes && !rtn.error) {
 					def newCounter = computeServer.volumes?.size()
+					log.info("RAZI :: newCounter: ${newCounter}")
+					log.info("RAZI :: resizeRequest.volumesUpdate.size(): ${resizeRequest.volumesUpdate.size()}")
 					resizeRequest.volumesUpdate?.each { volumeUpdate ->
 						StorageVolume existing = volumeUpdate.existingModel
 						Map updateProps = volumeUpdate.updateProps
@@ -1194,7 +1208,10 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 							def volumeId = existing.externalId
 							def diskSize = ComputeUtility.parseGigabytesToBytes(updateProps.size?.toLong())
 							def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${volumeId}"
+							log.info("RAZI :: volumesUpdate >> diskSize: ${diskSize}")
+							log.info("RAZI :: volumesUpdate >> diskPath: ${diskPath}")
 							def resizeResults = apiService.resizeDisk(hypervOpts, diskPath, diskSize)
+							log.info("RAZI :: volumesUpdate >> resizeResults: ${resizeResults}")
 
 							if (resizeResults.success == true) {
 								StorageVolume existingVolume = context.services.storageVolume.get(storageVolumeId)
@@ -1212,11 +1229,17 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						def diskSize = ComputeUtility.parseGigabytesToBytes(volumeAdd.size?.toLong())
 						def diskName = getUniqueDataDiskName(computeServer, newCounter++)
 						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
+						log.info("RAZI :: volumesAdd >> diskSize: ${diskSize}")
+						log.info("RAZI :: volumesAdd >> diskName: ${diskName}")
+						log.info("RAZI :: volumesAdd >> diskPath: ${diskPath}")
 						def diskResults = apiService.createDisk(hypervOpts, diskPath, diskSize)
+						log.info("RAZI :: volumesAdd >> diskResults: ${diskResults}")
 						log.debug("create disk: ${diskResults.success}")
 
 						if (diskResults.success == true && diskResults.error != true) {
 							def attachResults = apiService.attachDisk(hypervOpts, vmId, diskPath)
+							log.info("RAZI :: attachResults.success: ${attachResults.success}")
+							log.info("RAZI :: attachResults.error: ${attachResults.error}")
 							log.debug("attach: ${attachResults.success}")
 							if (attachResults.success == true && attachResults.error != true) {
 								def newVolume = buildStorageVolume(computeServer, volumeAdd, diskResults, newCounter)
@@ -1240,8 +1263,13 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						def diskName = volume.externalId
 						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
 
-						def diskConfig = volume.config ?: getDiskConfig(workload, computeServer, volume, hypervOpts)
+						log.info("RAZI :: volumesDelete >> volume.config: ${volume.config}")
+						def diskConfig = volume.config ?: getDiskConfig(computeServer, volume, hypervOpts)
+						log.info("RAZI :: volumesDelete >> diskConfig.ControllerType: ${diskConfig.ControllerType}")
+						log.info("RAZI :: volumesDelete >> diskConfig.ControllerNumber: ${diskConfig.ControllerNumber}")
+						log.info("RAZI :: volumesDelete >> diskConfig.ControllerLocation: ${diskConfig.ControllerLocation}")
 						def detachResults = apiService.detachDisk(hypervOpts, vmId, diskConfig.ControllerType, diskConfig.ControllerNumber, diskConfig.ControllerLocation)
+						log.debug ("RAZI :: volumesDelete >> detachResults.success: ${detachResults.success}")
 						log.debug ("detachResults.success: ${detachResults.success}")
 						if (detachResults.success == true) {
 							apiService.deleteDisk(hypervOpts, diskName)
@@ -1258,6 +1286,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			computeServer.status = 'provisioned'
 			computeServer = saveAndGet(computeServer)
 			rtn.success = true
+			log.info("RAZI :: rtn.success: ${rtn.success}")
 		} catch (e) {
 			log.error("Unable to resize workload: ${e.message}", e)
 			computeServer.status = 'provisioned'
