@@ -9,6 +9,8 @@ import com.morpheusdata.core.data.DatasetQuery
 import com.morpheusdata.core.providers.CloudProvider
 import com.morpheusdata.core.providers.ProvisionProvider
 import com.morpheusdata.core.util.ConnectionUtils
+import com.morpheusdata.hyperv.sync.NetworkSync
+import com.morpheusdata.hyperv.sync.VirtualMachineSync
 import com.morpheusdata.hyperv.utils.HypervOptsUtility
 import com.morpheusdata.model.*
 import com.morpheusdata.request.ValidateCloudRequest
@@ -397,7 +399,7 @@ class HyperVCloudProvider implements CloudProvider {
 								diskRoot   : cloudConfig.diskPath,
 								vmRoot     : cloudConfig.vmPath
 						]
-						def vmSwitches = apiService.listVmSwitches(hypervOpts, opts)
+						def vmSwitches = apiService.listVmSwitches(opts)
 						log.debug("validate: vmSwitches: ${vmSwitches}")
 						if (vmSwitches.success == true)
 							rtn.success = true
@@ -533,8 +535,9 @@ class HyperVCloudProvider implements CloudProvider {
 							virtualMachineList += results.virtualMachines
 							log.debug("virtualMachineList.size(): ${virtualMachineList.size()}")
 							if (results.success == true) {
-								// TODO: cacheNetworks need to be implemented with cacheNetowork user story
-								//rtn.success = cacheNetworks(opts, node).success
+								def now = new Date().time
+								new NetworkSync(context, cloud, apiService).execute()
+								log.debug("${cloud.name}: NetworkSync in ${new Date().time - now}ms")
 
 								allOnline = results.success && allOnline
 								anyOnline = results.success || anyOnline
@@ -562,8 +565,10 @@ class HyperVCloudProvider implements CloudProvider {
 				def vmCacheOpts = [zone: cloud]
 				def doInventory = cloud.getConfigProperty('importExisting')
 				vmCacheOpts.createNew = (doInventory == 'on' || doInventory == 'true' || doInventory == true)
-				// TODO: cacheVirtualMachines need to be implemented with VM sync user story
-				// cacheVirtualMachines(vmCacheOpts, null, [virtualMachines: virtualMachineList, success: true])
+
+				def now = new Date().time
+				new VirtualMachineSync(context, cloud, apiService, this).execute()
+				log.debug("${cloud.name}: VirtualMachineSync in ${new Date().time - now}ms")
 				response.success = true
 			}
 			if (allOnline == true && anyOnline == true) {
@@ -688,7 +693,8 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	ServiceResponse stopServer(ComputeServer computeServer) {
-		return ServiceResponse.success()
+		HyperVProvisionProvider provisionProvider = new HyperVProvisionProvider(plugin, context)
+		return provisionProvider.stopServer(computeServer)
 	}
 
 	/**
@@ -698,7 +704,26 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	ServiceResponse deleteServer(ComputeServer computeServer) {
-		return ServiceResponse.success()
+		log.debug("deleteServer: ${computeServer}")
+		def rtn = [success: false]
+		try {
+			def hypervOpts = HypervOptsUtility.getAllHypervServerOpts(context, computeServer)
+			def stopResults = apiService.stopServer(hypervOpts + [turnOff: true], hypervOpts.name)
+			if(stopResults.success == true) {
+				def removeResults = apiService.removeServer(hypervOpts, hypervOpts.name)
+				if(removeResults.success == true) {
+					def deleteResults = apiService.deleteServer(hypervOpts)
+					if(deleteResults.success == true) {
+						rtn.success = true
+					}
+				}
+			}
+		} catch (e) {
+			log.error("deleteServer error: ${e}", e)
+			rtn.msg = e.message
+		}
+		return ServiceResponse.create(rtn)
+
 	}
 
 	/**
@@ -719,7 +744,7 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	String getDefaultProvisionTypeCode() {
-		return HyperVProvisionProvider.PROVISION_PROVIDER_CODE
+		return HyperVProvisionProvider.PROVIDER_CODE
 	}
 
 	/**
