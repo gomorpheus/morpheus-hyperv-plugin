@@ -16,11 +16,11 @@ import groovy.util.logging.Slf4j
 @Slf4j
 class HyperVBackupRestoreProvider implements BackupRestoreProvider {
 
-	Plugin plugin
+	HyperVPlugin plugin
 	MorpheusContext morpheusContext
 	HyperVApiService apiService
 
-	HyperVBackupRestoreProvider(Plugin plugin, MorpheusContext morpheusContext) {
+	HyperVBackupRestoreProvider(HyperVPlugin plugin, MorpheusContext morpheusContext) {
 		this.plugin = plugin
 		this.morpheusContext = morpheusContext
 		this.apiService = new HyperVApiService(morpheusContext)
