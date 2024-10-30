@@ -168,7 +168,7 @@ class HyperVBackupTypeProvider extends AbstractBackupTypeProvider {
 	@Override
 	HyperVBackupRestoreProvider getRestoreProvider() {
 		if(!this.restoreProvider) {
-		this.restoreProvider = new HyperVBackupRestoreProvider(getPlugin())
+		this.restoreProvider = new HyperVBackupRestoreProvider(plugin, morpheusContext)
 		}
 		return this.restoreProvider
 	}
