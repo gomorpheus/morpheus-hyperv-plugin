@@ -19,8 +19,8 @@ import groovy.util.logging.Slf4j
 @Slf4j
 class HyperVBackupTypeProvider extends AbstractBackupTypeProvider {
 
-	BackupExecutionProvider executionProvider;
-	BackupRestoreProvider restoreProvider;
+	BackupExecutionProvider executionProvider
+	BackupRestoreProvider restoreProvider
 	MorpheusContext morpheusContext
 	HyperVPlugin plugin
 
