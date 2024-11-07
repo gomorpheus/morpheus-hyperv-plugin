@@ -914,6 +914,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				def hypervOpts = HypervOptsUtility.getAllHypervServerOpts(context, computeServer)
 				def stopResults = apiService.stopServer(hypervOpts, hypervOpts.name)
 				if(stopResults.success == true){
+					context.async.computeServer.updatePowerState(computeServer.id, ComputeServer.PowerState.on)
 					rtn.success = true
 				}
 			} else {
