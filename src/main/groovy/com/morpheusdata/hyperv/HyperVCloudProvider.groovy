@@ -682,7 +682,8 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	ServiceResponse startServer(ComputeServer computeServer) {
-		return ServiceResponse.success()
+		HyperVProvisionProvider provisionProvider = new HyperVProvisionProvider(plugin, context)
+		return provisionProvider.startServer(computeServer)
 	}
 
 	/**
