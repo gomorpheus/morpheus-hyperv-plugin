@@ -474,6 +474,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	ServiceResponse<ProvisionResponse> runWorkload(Workload workload, WorkloadRequest workloadRequest, Map opts) {
 		log.debug "runWorkload: ${workload} ${workloadRequest} ${opts}"
+		log.info ("Ray :: after change: runWorkload: opts: ${opts}")
 		ProvisionResponse provisionResponse = new ProvisionResponse(success: true)
 		def server = workload.server
 		def cloud = server.cloud
@@ -482,16 +483,20 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		try {
 			def imageId
 			def containerConfig = workload.getConfigMap()
+			log.info ("Ray :: runWorkload: containerConfig: ${containerConfig}")
 			hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, cloud)
+			log.info ("Ray :: runWorkload: hypervOpts1: ${hypervOpts}")
 			hypervOpts.name = server.name
 			VirtualImage virtualImage
 			def node = context.async.computeServer.get(containerConfig.hostId?.toLong()).blockingGet()
 			node = containerConfig.hostId ? node : pickHypervHypervisor(cloud)
 			String generation = 'generation1'
 			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
+			log.info ("Ray :: runWorkload: hypervOpts2: ${hypervOpts}")
 			hypervOpts.hypervisor = node
 			if (containerConfig.imageId || containerConfig.template || workload.workloadType.virtualImage?.id) {
 				def virtualImageId = (containerConfig.imageId?.toLong() ?: containerConfig.template?.toLong() ?: server.sourceImage.id)
+				log.info ("Ray :: runWorkload: virtualImageId: ${virtualImageId}")
 				virtualImage = context.async.virtualImage.get(virtualImageId).blockingGet()
 				generation = virtualImage.getConfigProperty('generation')
 				imageId = virtualImage.locations.find { it.refType == "ComputeZone" && it.refId == cloud.id }?.externalId
@@ -521,8 +526,11 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					log.debug "hypervOpts: ${hypervOpts}"
 					def imageResults = apiService.insertContainerImage(hypervOpts)
 					log.debug("imageResults: ${imageResults}")
+					log.info ("Ray :: runWorkload: imageResults: ${imageResults}")
+					log.info ("Ray :: runWorkload: imageResults.success: ${imageResults.success}")
 					if (imageResults.success == true) {
 						imageId = imageResults.imageId
+						log.info ("Ray :: runWorkload: imageId1: ${imageId}")
 						def locationConfig = [
 								virtualImage: virtualImage,
 								code        : "hyperv.image.${cloud.id}.${virtualImage.externalId}",
@@ -537,7 +545,9 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					}
 				}
 			}
+			log.info ("Ray :: runWorkload: imageId2: ${imageId}")
 			def cloneContainer = context.async.workload.get(opts.cloneContainerId?.toLong()).blockingGet()
+			log.info ("Ray :: runWorkload: cloneContainer?.id: ${cloneContainer?.id}")
 			if (opts.cloneContainerId && cloneContainer) {
 				def vmId = cloneContainer.server.externalId
 				def snapshots = context.services.backup.backupResult.list(new DataQuery()
@@ -563,12 +573,14 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			}
 
 			log.debug("imageid: ${imageId}")
+			log.info ("Ray :: runWorkload: imageId3: ${imageId}")
 			if (imageId) {
 				opts.installAgent = virtualImage ? virtualImage.installAgent : true
 				def userGroups = workload.instance.userGroups?.toList() ?: []
 				if (workload.instance.userGroup && userGroups.contains(workload.instance.userGroup) == false) {
 					userGroups << workload.instance.userGroup
 				}
+				log.info ("Ray :: runWorkload: userGroups?.size(): ${userGroups?.size()}")
 				server.sourceImage = virtualImage
 				server.externalId = hypervOpts.name
 				server.parentServer = node
@@ -590,10 +602,17 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				hypervOpts.secureBoot = virtualImage?.uefi ?: false
 				hypervOpts.imageId = imageId
 				hypervOpts.diskMap = context.services.virtualImage.getImageDiskMap(virtualImage)
+				log.info ("Ray :: runWorkload: hypervOpts.diskMap: ${hypervOpts.diskMap}")
+				log.info ("Ray :: runWorkload: before getHypervWorkloadOpts1: hypervOpts: ${hypervOpts}")
 				hypervOpts += HypervOptsUtility.getHypervWorkloadOpts(context, workload)
+				log.info ("Ray :: runWorkload: after getHypervWorkloadOpts1: hypervOpts: ${hypervOpts}")
 				hypervOpts.networkConfig = opts.networkConfig
 				def cloudConfigOpts = context.services.provision.buildCloudConfigOptions(cloud, server, opts.installAgent, opts)
+				log.info ("Ray :: runWorkload: cloudConfigOpts: ${cloudConfigOpts}")
 				log.debug("virtualImage.isSysprep: ${virtualImage.isSysprep}")
+				log.info ("Ray :: runWorkload: virtualImage?.isCloudInit: ${virtualImage?.isCloudInit}")
+				log.info ("Ray :: runWorkload: virtualImage?.isSysprep: ${virtualImage?.isSysprep}")
+				log.info ("Ray :: runWorkload: platform: ${platform}")
 				if (virtualImage?.isCloudInit) {
 					opts.installAgent = opts.installAgent && (cloudConfigOpts.installAgent != true)
 					hypervOpts.cloudConfigUser = workloadRequest?.cloudConfigUser ?: null
@@ -615,16 +634,24 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				server = saveAndGetMorpheusServer(server, true)
 				//create it
 				hypervOpts.newServer = server
+				log.info ("Ray :: runWorkload: after changes: calling cloneServer: hypervOpts: ${hypervOpts}")
 				def createResults = apiService.cloneServer(hypervOpts)
+				log.info ("Ray :: runWorkload: createResults: ${createResults}")
+				log.info ("Ray :: runWorkload: createResults?.success: ${createResults?.success}")
+				log.info ("Ray :: runWorkload: createResults?.server: ${createResults?.server}")
 				log.debug("createResults: ${createResults}")
 				if (createResults.success == true && createResults.server) {
+					log.info ("Ray :: runWorkload: createResults.server.externalId: ${createResults.server.externalId}")
 					server.externalId = createResults.server.externalId
 					provisionResponse.externalId = server.externalId
 					server.parentServer = node
 					def serverDisks = createResults.server.disks
+					log.info ("Ray :: runWorkload: serverDisks: ${serverDisks}")
 					if (serverDisks) {
 						def storageVolumes = server.volumes
+						log.info ("Ray :: runWorkload: storageVolumes?.size(): ${storageVolumes?.size()}")
 						def rootVolume = storageVolumes.find { it.rootVolume == true }
+						log.info ("Ray :: runWorkload: rootVolume: ${rootVolume}")
 						rootVolume.externalId = serverDisks.osDisk?.externalId
 						storageVolumes.each { storageVolume ->
 							def dataDisk = serverDisks.dataDisks.find { it.id == storageVolume.id }
@@ -635,11 +662,15 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					}
 					server = saveAndGetMorpheusServer(server, true)
 					def serverDetails = apiService.getServerDetails(hypervOpts, server.externalId)
+					log.info ("Ray :: runWorkload: serverDetails: ${serverDetails}")
 					log.debug("runWorkload: serverDetails: ${serverDetails}")
+					log.info ("Ray :: runWorkload: serverDetails.success: ${serverDetails.success}")
 					if (serverDetails.success == true) {
+						log.info ("Ray :: runWorkload: serverDetails.server: ${serverDetails.server}")
 						def newIpAddress = serverDetails.server?.ipAddress ?: createResults.server?.ipAddress
 						def macAddress = serverDetails.server?.macAddress
 						opts.network = applyComputeServerNetworkIp(server, newIpAddress, newIpAddress, 0, macAddress)
+						log.info ("Ray :: runWorkload: opts.network: ${opts.network}")
 						server = getMorpheusServer(server.id)
 						server.osDevice = '/dev/sda'
 						server.dataDevice = '/dev/sda'
@@ -657,12 +688,15 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						context.async.computeServer.save(server).blockingGet()
 						provisionResponse.success = true
 						log.debug("provisionResponse.success: ${provisionResponse.success}")
+						log.info ("Ray :: runWorkload: provisionResponse.success: ${provisionResponse.success}")
 					} else {
 						server.statusMessage = 'Failed to run server'
 						context.async.computeServer.save(server).blockingGet()
 						provisionResponse.success = false
+						log.info ("Ray :: runWorkload: provisionResponse.success1: ${provisionResponse.success}")
 					}
 				} else {
+					log.info ("Ray :: runWorkload: createResults.server?.externalId: ${createResults.server?.externalId}")
 					if (createResults.server?.externalId) {
 						// we did create a vm though so we need to bind it to the server
 						server.externalId = createResults.server.externalId
@@ -671,15 +705,20 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					server.statusMessage = 'Failed to create server'
 					context.async.computeServer.save(server).blockingGet()
 					provisionResponse.success = false
+					log.info ("Ray :: runWorkload: provisionResponse.success2: ${provisionResponse.success}")
 				}
 			} else {
 				server.statusMessage = 'Failed to upload image'
 				context.async.computeServer.save(server).blockingGet()
+				log.info ("Ray :: runWorkload: provisionResponse.success3: ${provisionResponse.success}")
 			}
 			provisionResponse.noAgent = opts.noAgent ?: false
+			log.info ("Ray :: runWorkload: provisionResponse.noAgent: ${provisionResponse.noAgent}")
 			if (provisionResponse.success != true) {
+				log.info ("Ray :: runWorkload: provisionResponse.success4: ${provisionResponse.success}")
 				return new ServiceResponse(success: false, msg: provisionResponse.message ?: 'vm config error', error: provisionResponse.message, data: provisionResponse)
 			} else {
+				log.info ("Ray :: runWorkload: provisionResponse.success5: ${provisionResponse.success}")
 				return new ServiceResponse<ProvisionResponse>(success: true, data: provisionResponse)
 			}
 		} catch (e) {
