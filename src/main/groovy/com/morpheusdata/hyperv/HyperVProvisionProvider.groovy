@@ -1155,11 +1155,11 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				currentCores = server.maxCores ?: 1
 			}
 			log.info("RAZI :: currentMemory: ${currentMemory}")
-			log.info("RAZI :: currentMemory: ${currentMemory}")
+			log.info("RAZI :: currentCores: ${currentCores}")
 			def neededMemory = requestedMemory - currentMemory
 			def neededCores = (requestedCores ?: 1) - (currentCores ?: 1)
 			log.info("RAZI :: neededMemory: ${neededMemory}")
-			log.info("RAZI :: neededCores: ${neededCores}")
+			log.info("RAZI :: neededCores: ${neededCores}") //0
 
 			def vmId = computeServer.externalId
 			log.info("RAZI :: vmId: ${vmId}")
@@ -1181,7 +1181,9 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					if (resizeResults.success == true) {
 						//computeServer.plan = plan
 						computeServer.maxCores = (requestedCores ?: 1).toLong()
+						log.info("RAZI :: computeServer.maxCores: ${computeServer.maxCores}")
 						computeServer.maxMemory = requestedMemory.toLong()
+						log.info("RAZI :: computeServer.maxMemory: ${computeServer.maxMemory}")
 						computeServer = saveAndGet(computeServer)
 						if (isWorkload) {
 							workload.maxCores = (requestedCores ?: 1).toLong()
@@ -1224,6 +1226,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						}
 					}
 
+					log.info("RAZI :: resizeRequest.volumesAdd.size(): ${resizeRequest.volumesAdd.size()}")
 					resizeRequest.volumesAdd.each { volumeAdd ->
 						//new disk add it
 						def diskSize = ComputeUtility.parseGigabytesToBytes(volumeAdd.size?.toLong())
@@ -1241,13 +1244,19 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 							log.info("RAZI :: attachResults.success: ${attachResults.success}")
 							log.info("RAZI :: attachResults.error: ${attachResults.error}")
 							log.debug("attach: ${attachResults.success}")
+                            log.info("RAZI :: attachResults.success == true && attachResults.error != true: ${attachResults.success == true && attachResults.error != true}")
 							if (attachResults.success == true && attachResults.error != true) {
 								def newVolume = buildStorageVolume(computeServer, volumeAdd, diskResults, newCounter)
+                                log.info("RAZI :: newVolume: ${newVolume}")
 								newVolume.maxStorage = volumeAdd.size.toInteger() * ComputeUtility.ONE_GIGABYTE
 								newVolume.externalId = diskName
+                                log.info("RAZI :: newVolume.maxStorage: ${newVolume.maxStorage}")
+                                log.info("RAZI :: newVolume.externalId: ${newVolume.externalId}")
 								context.async.storageVolume.create([newVolume], computeServer).blockingGet()
+                                log.info("RAZI :: new volume created")
 								computeServer = getMorpheusServer(computeServer.id)
 								newCounter++
+                                log.info("RAZI :: newVolume >> newCounter: ${newCounter}")
 							} else {
 								log.error "Error in attaching volume: ${attachResults}"
 								rtn.error = "Error in attaching volume"
@@ -1258,6 +1267,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						}
 					}
 
+					log.info("RAZI :: resizeRequest.volumesDelete.size(): ${resizeRequest.volumesDelete.size()}")
 					resizeRequest.volumesDelete.each { volume ->
 						log.debug "Deleting volume : ${volume.externalId}"
 						def diskName = volume.externalId
@@ -1307,8 +1317,10 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	protected ComputeServer saveAndGet(ComputeServer server) {
 		def saveResult = context.async.computeServer.bulkSave([server]).blockingGet()
 		def updatedServer
+		log.info("RAZI :: saveAndGet >> saveResult.success: ${saveResult.success}")
 		if (saveResult.success == true) {
 			updatedServer = saveResult.persistedItems.find { it.id == server.id }
+			log.info("RAZI :: saveAndGet >> updatedServer: ${updatedServer}")
 		} else {
 			updatedServer = saveResult.failedItems.find { it.id == server.id }
 			log.warn("Error saving server: ${server?.id}")
@@ -1471,6 +1483,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			} else {
 				server.statusMessage = 'Error creating server'
 			}
+			log.info("RAZI :: runHost >> server.interfaces.size(): ${server?.interfaces?.size()}")
 			if(provisionResponse.success != true) {
 				return new ServiceResponse(success: false, msg: provisionResponse.message ?: 'vm config error', error: provisionResponse.message, data: provisionResponse)
 			} else {
@@ -1522,6 +1535,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	ServiceResponse finalizeHost(ComputeServer server) {
 		ServiceResponse rtn = ServiceResponse.prepare()
 		log.debug("finalizeHost: ${server?.id}")
+		log.info("RAZI :: finalizeHost >> server.interfaces.size()1: ${server.interfaces.size()}")
 		try {
 			def config = server.getConfigMap()
 			def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, server.cloud)
@@ -1548,10 +1562,11 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						context.async.computeServer.computeServerInterface.save([netInterface]).blockingGet()
 					}
 				}
-				def newIpAddress = serverDetail.server?.ipAddress
-				def macAddress = serverDetail.server?.macAddress
-				applyComputeServerNetworkIp(server, newIpAddress, newIpAddress, 0, macAddress)
+//				def newIpAddress = serverDetail.server?.ipAddress
+//				def macAddress = serverDetail.server?.macAddress
+//				applyComputeServerNetworkIp(server, newIpAddress, newIpAddress, 0, macAddress)
 				context.async.computeServer.save(server).blockingGet()
+				log.info("RAZI :: finalizeHost >> server.interfaces.size()2: ${server.interfaces.size()}")
 				rtn.success = true
 			}
 		} catch (e){
