@@ -1280,6 +1280,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						log.info("RAZI :: volumesDelete >> diskConfig.ControllerLocation: ${diskConfig.ControllerLocation}")
 						def detachResults = apiService.detachDisk(hypervOpts, vmId, diskConfig.ControllerType, diskConfig.ControllerNumber, diskConfig.ControllerLocation)
 						log.debug ("RAZI :: volumesDelete >> detachResults.success: ${detachResults.success}")
+
 						log.debug ("detachResults.success: ${detachResults.success}")
 						if (detachResults.success == true) {
 							apiService.deleteDisk(hypervOpts, diskName)
@@ -1609,7 +1610,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 		)
 		return newVolume
 	}
-
 
 	def getDiskConfig(ComputeServer server, StorageVolume volume, hypervOpts) {
 		def rtn = [success: true]
