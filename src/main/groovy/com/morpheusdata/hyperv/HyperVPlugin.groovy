@@ -40,8 +40,8 @@ class HyperVPlugin extends Plugin {
 	@Override
 	void onDestroy() {
 		List<String> seedsToRun = [
-			"application.ZonesTypeXenSeed",
-			"application.ProvisionTypeXenSeed",
+			"application.ZoneTypeHyperv",
+			"application.ProvisionTypeHypervSeed",
 		]
 		this.morpheus.services.seed.reinstallSeedData(seedsToRun) // needs to be synchronous to prevent seeds from running during plugin install
 	}
