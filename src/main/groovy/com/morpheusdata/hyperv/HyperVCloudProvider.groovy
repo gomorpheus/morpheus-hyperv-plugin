@@ -198,7 +198,7 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	Collection<NetworkType> getNetworkTypes() {
-		Collection<NetworkType> networks = context.services.network.list(new DataQuery().withFilter(
+		Collection<NetworkType> networks = context.services.network.type.list(new DataQuery().withFilter(
 				'code','in', ['dockerBridge', 'childNetwork', 'overlay']))
 
 		networks << new NetworkType([
