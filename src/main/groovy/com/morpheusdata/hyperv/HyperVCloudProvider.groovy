@@ -396,9 +396,7 @@ class HyperVCloudProvider implements CloudProvider {
 					if (cloud.enabled == true) {
 						def opts = [
 								hypervisor : [:],
-//								sshHost    : cloudConfig.hypervHost,
 								sshHost    : cloudConfig.host,
-//								sshPort    : cloudConfig.winrmPort,
 								sshPort    : cloudConfig.port,
 								sshUsername: validateCloudRequest?.credentialUsername,
 								sshPassword: validateCloudRequest?.credentialPassword,
@@ -443,9 +441,7 @@ class HyperVCloudProvider implements CloudProvider {
 					def initResults = initializeHypervisor(cloudInfo)
 					log.debug("initResults: {}", initResults)
 					if(initResults.success == true) {
-					// TODO: below methods should be enebled after implementing it.
 						refresh(cloudInfo)
-//						refreshDaily(cloudInfo)
 						rtn.success = true
 					}
 				}
@@ -458,7 +454,6 @@ class HyperVCloudProvider implements CloudProvider {
 		return rtn
 	}
 
-	// TODO: Below method would be implemented later by taking reference from embedded code. we have separate story to work on this
 	def initializeHypervisor(cloud) {
 		def rtn = [success: false]
 		log.debug("cloud: ${cloud}")
@@ -482,8 +477,6 @@ class HyperVCloudProvider implements CloudProvider {
 			if (serverInfo.hostname) {
 				newServer.hostname = serverInfo.hostname
 			}
-//			newServer.sshHost = cloud.getConfigProperty('hypervHost')
-//			newServer.sshPort = cloud.getConfigProperty('winrmPort') ? cloud.getConfigProperty('winrmPort').toInteger() : 5985
 			newServer.sshHost = cloud.getConfigProperty('host')
 			newServer.sshPort = cloud.getConfigProperty('port') ? cloud.getConfigProperty('port').toInteger() : 5985
 			newServer.internalIp = newServer.sshHost
@@ -845,7 +838,6 @@ class HyperVCloudProvider implements CloudProvider {
 			hypervOpts.zoneRoot = hypervisorOpts.zoneRoot
 			hypervOpts.diskRoot = hypervisorOpts.diskRoot
 			hypervOpts.vmRoot = hypervisorOpts.vmRoot
-//			hypervOpts.sshPort = opts.zone.getConfigMap().winrmPort
 			hypervOpts.sshPort = opts.zone.getConfigMap().port
 
 			def hostResults = apiService.getHypervHost(hypervOpts)
