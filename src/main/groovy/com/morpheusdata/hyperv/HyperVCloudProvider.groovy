@@ -70,9 +70,7 @@ class HyperVCloudProvider implements CloudProvider {
 		def displayOrder = 0
 		Collection<OptionType> options = []
 		options << new OptionType(
-//				name: 'Hyper-V Host',
 				name: 'Host',
-//				code: 'zoneType.hyperv.hypervHost',
 				code: 'zoneType.hyperv.host',
 				fieldName: 'host',
 				displayOrder: displayOrder,
