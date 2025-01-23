@@ -230,8 +230,11 @@ class HyperVApiService {
 
                 log.debug "updateServer: ${command}"
                 def out = executeCommand(command, opts)
+                log.info("RAZI :: out.success: ${out.success}")
+                log.info("RAZI :: out.exitCode: ${out.exitCode}")
                 log.debug "updateServer results: ${out}"
                 rtn.success = out.success && out.exitCode == '0'
+                log.info("RAZI :: rtn.success: ${rtn.success}")
             } else {
                 log.info("No updates for server: ${vmId}")
                 rtn.success = true
