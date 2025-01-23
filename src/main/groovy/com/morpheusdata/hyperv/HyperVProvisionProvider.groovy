@@ -1422,6 +1422,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				hypervOpts.diskMap = context.services.virtualImage.getImageDiskMap(virtualImage)
 				server = saveAndGetMorpheusServer(server, true)
 				hypervOpts += HypervOptsUtility.getHypervServerOpts(context, server)
+				log.info("RAZI :: runHost >> hypervOpts: ${hypervOpts}")
 
 				hypervOpts.networkConfig = hostRequest.networkConfiguration
 				hypervOpts.cloudConfigUser = hostRequest.cloudConfigUser
@@ -1441,7 +1442,9 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				hypervOpts.newServer = server
 
 				//create it in hyperv
+				log.info("RAZI :: runHost >> hypervOpts: ${hypervOpts}")
 				def createResults = apiService.cloneServer(hypervOpts)
+				log.info("RAZI :: runHost >> createResults: ${createResults}")
 				log.debug("create server results:${createResults}")
 				if(createResults.success == true) {
 					def instance = createResults.server

@@ -19,6 +19,33 @@ class HypervOptsUtility {
         return rtn
     }
 
+    static getServerRootSize(server) {
+        def rtn
+        def rootDisk = getServerRootDisk(server)
+        if (rootDisk)
+            rtn = rootDisk.maxStorage
+        else
+            rtn = server.maxStorage ?: server.plan.maxStorage
+        return rtn
+    }
+    static getServerRootDisk(server) {
+        def rtn = server?.volumes?.find { it.rootVolume == true }
+        return rtn
+    }
+    static getServerVolumeSize(server) {
+        def rtn = server.maxStorage ?: server.plan.maxStorage
+        if (server?.volumes?.size() > 0) {
+            def newMaxStorage = server.volumes.sum { it.maxStorage ?: 0 }
+            if (newMaxStorage > rtn)
+                rtn = newMaxStorage
+        }
+        return rtn
+    }
+    static getServerDataDiskList(server) {
+        def rtn = server?.volumes?.findAll { it.rootVolume == false }?.sort { it.id }
+        return rtn
+    }
+
     static getHypervServerOpts(MorpheusContext context, server) {
         def zoneConfig = server.cloud.getConfigMap()
         def serverName = server.name //cleanName(server.name)
@@ -28,14 +55,17 @@ class HypervOptsUtility {
         def maxCpu = server.maxCpu ?:server.plan?.maxCpu ?:1
         def maxCores = server.maxCores ?:server.plan.maxCores ?:1
         // TODO: below lines are commented for now, need to work on this if its needed.
-        /*def maxStorage = getServerRootSize(server)
+        def maxStorage = getServerRootSize(server)
+        log.info("RAZI :: getHypervServerOpts >> maxStorage: ${maxStorage}")
         def maxTotalStorage = getServerVolumeSize(server)
-        def dataDisks = getServerDataDiskList(server)*/
+        log.info("RAZI :: getHypervServerOpts >> maxTotalStorage: ${maxTotalStorage}")
+        def dataDisks = getServerDataDiskList(server)
+        log.info("RAZI :: getHypervServerOpts >> dataDisks: ${dataDisks}")
         def network = context.services.network.get(serverConfig.networkId?.toLong())
         def serverFolder = "morpheus_server_${server.id}"
         return [name:serverName, config:serverConfig, server:server, memory:maxMemory, maxCores:maxCores, serverFolder:serverFolder,
-                hostname:server.getExternalHostname(), network:network]
-//                osDiskSize:maxStorage, maxTotalStorage:maxTotalStorage, dataDisks:dataDisks]
+                hostname:server.getExternalHostname(), network:network, maxCpu: maxCpu,
+                osDiskSize:maxStorage, maxTotalStorage:maxTotalStorage, dataDisks:dataDisks]
     }
 
     static getAllHypervWorloadOpts(MorpheusContext context, workload) {

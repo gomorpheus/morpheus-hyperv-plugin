@@ -320,6 +320,7 @@ class HyperVApiService {
                         }
                     }
                     //resize disk
+                    log.info("RAZI :: cloneServer >> opts.osDiskSize: ${opts.osDiskSize}")
                     if (opts.osDiskSize)
                         resizeDisk(opts, osDiskPath, opts.osDiskSize)
                     //add disk
