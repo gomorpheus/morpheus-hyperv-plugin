@@ -77,3 +77,19 @@ resource "virtual-image" "hyperv-image-morpheus-windows-2012-r2" {
   delete             = false
   zoneType           = "hyperv"
 }
+
+resource "virtual-image" "hyperv-image-morpheus-ubuntu-16_04" {
+  code               = "hyperv.image.morpheus.ubuntu.16.04.3-v1.ubuntu.16.04.3.amd64"
+  category           = "hyperv.image.morpheus.ubuntu"
+  sshUsername        = "cloud-user"
+  sshPassword        = null
+  name               = "Morpheus Ubuntu 16.04.3 v1"
+  imageType          = "vhd"
+  remotePath         = "https://s3-us-west-1.amazonaws.com/morpheus-images/vhd/ubuntu/ubuntu-16_04_3-v1-amd64/morpheus-ubuntu-16_04_3-v1-amd64.vhd"
+  imagePath          = "vhd/ubuntu/ubuntu-16_04_3-v1-amd64"
+  systemImage        = true
+  installAgent       = true
+  isCloudInit        = true
+  osType             = "ubuntu.16.04.64"
+  zoneType           = "hyperv"
+}

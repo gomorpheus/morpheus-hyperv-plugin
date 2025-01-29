@@ -34,18 +34,27 @@ class HyperVApiService {
     }
 
     def insertContainerImage(opts) {
+        log.info ("Ray :: insertContainerImage: opts: ${opts}")
         def rtn = [success: false, imageExists: false]
         def zoneRoot = opts.zoneRoot ?: defaultRoot
+        log.info ("Ray :: insertContainerImage: zoneRoot: ${zoneRoot}")
         def image = opts.image
         def imageName = image.name
+        log.info ("Ray :: insertContainerImage: imageName: ${imageName}")
         def imageFolderName = formatImageFolder(imageName)
+        log.info ("Ray :: insertContainerImage: imageFolderName: ${imageFolderName}")
         def tgtFolder = "${zoneRoot}\\images\\${imageFolderName}"
+        log.info ("Ray :: insertContainerImage: tgtFolder: ${tgtFolder}")
         def match = findImage(opts, imageName)
+        log.info ("Ray :: insertContainerImage: match: ${match}")
         log.info("findImage: ${match}")
+        log.info ("Ray :: insertContainerImage: match.imageExists: ${match.imageExists}")
         if (match.imageExists == false) {
             //transfer it to host
+            log.info ("Ray :: insertContainerImage: imageName1: ${imageName}")
             def transferResults = transferImage(opts, image.cloudFiles, imageName)
             log.debug "transferImage: ${transferResults}"
+            log.info ("Ray :: insertContainerImage: transferResults.success: ${transferResults.success}")
             if (transferResults.success == true) {
                 //clone it to vm folder
                 rtn.image = [path: tgtFolder, name: imageName]
@@ -59,60 +68,93 @@ class HyperVApiService {
             rtn.imageId = tgtFolder
             rtn.success = true
         }
+        log.info ("Ray :: insertContainerImage: rtn: ${rtn}")
         return rtn
     }
 
     def transferImage(opts, cloudFiles, imageName) {
         def rtn = [success: false, results: []]
+        log.info ("Ray :: transferImage: imageName: ${imageName}")
         CloudFile metadataFile = (CloudFile) cloudFiles?.find { cloudFile -> cloudFile.name == 'metadata.json' }
+        log.info ("Ray :: transferImage: metadataFile: ${metadataFile}")
         List<CloudFile> vhdFiles = cloudFiles?.findAll { cloudFile -> cloudFile.name.indexOf(".morpkg") == -1 && (cloudFile.name.indexOf('.vhd') > -1 || cloudFile.name.indexOf('.vhdx')) && cloudFile.name.endsWith("/") == false }
+        log.info ("Ray :: transferImage: vhdFiles?.size(): ${vhdFiles?.size()}")
         def zoneRoot = opts.zoneRoot ?: defaultRoot
+        log.info ("Ray :: transferImage: zoneRoot: ${zoneRoot}")
         def imageFolderName = formatImageFolder(imageName)
+        log.info ("Ray :: transferImage: imageFolderName: ${imageFolderName}")
         List<Map> fileList = []
         def tgtFolder = "${zoneRoot}\\images\\${imageFolderName}"
+        log.info ("Ray :: transferImage: tgtFolder: ${tgtFolder}")
         opts.targetImageFolder = tgtFolder
         def command = "mkdir \"${tgtFolder}\""
+        log.info ("Ray :: transferImage: command: ${command}")
         log.debug("command: ${command}")
         def dirResults = executeCommand(command, opts)
+        log.info ("Ray :: transferImage: dirResults: ${dirResults}")
+        log.info ("Ray :: transferImage: dirResults?.success: ${dirResults?.success}")
+        log.info ("Ray :: transferImage: dirResults?.data: ${dirResults?.data}")
+        log.info ("Ray :: transferImage: dirResults?.error: ${dirResults?.error}")
 
+        log.info ("Ray :: transferImage: metadataFile: ${metadataFile}")
         if (metadataFile) {
             fileList << [inputStream: metadataFile.inputStream, contentLength: metadataFile.contentLength, targetPath: "${tgtFolder}\\metadata.json".toString(), copyRequestFileName: "metadata.json"]
         }
         vhdFiles.each { CloudFile vhdFile ->
 			def imageFileName = extractImageFileName(vhdFile.name)
+            log.info ("Ray :: transferImage: imageFileName: ${imageFileName}")
             def filename = extractFileName(vhdFile.name)
+            log.info ("Ray :: transferImage: filename: ${filename}")
             fileList << [inputStream: vhdFile.inputStream, contentLength: vhdFile.getContentLength(), targetPath: "${tgtFolder}\\${imageFileName}".toString(), copyRequestFileName: filename]
         }
         fileList.each { Map fileItem ->
+            log.info ("Ray :: transferImage: fileItem: ${fileItem}")
             Long contentLength = (Long) fileItem.contentLength
+            log.info ("Ray :: transferImage: contentLength: ${contentLength}")
 			def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.hypervisor, fileItem.copyRequestFileName, fileItem.targetPath, fileItem.inputStream, contentLength, null, true)
-			rtn.success = fileResults.success
+            log.info ("Ray :: transferImage: fileResults: ${fileResults}")
+            log.info ("Ray :: transferImage: fileResults?.success: ${fileResults?.success}")
+            rtn.success = fileResults.success
         }
+        log.info ("Ray :: transferImage: rtn: ${rtn}")
         return rtn
     }
 
     def cloneImage(opts, srcImage, tgtName) {
         log.info("cloneImage: ${srcImage} -> ${tgtName}")
+        log.info ("Ray :: cloneImage: opts: ${opts}")
+        log.info ("Ray :: cloneImage: srcImage: ${srcImage}")
+        log.info ("Ray :: cloneImage: tgtName: ${tgtName}")
         def rtn = [success: false]
         try {
             def diskRoot = opts.diskRoot
+            log.info ("Ray :: cloneImage: diskRoot: ${diskRoot}")
             def imageFolderName = opts.serverFolder
+            log.info ("Ray :: cloneImage: imageFolderName: ${imageFolderName}")
             def tgtFolder = "${diskRoot}\\${imageFolderName}"
+            log.info ("Ray :: cloneImage: tgtFolder: ${tgtFolder}")
             def command = "mkdir \"${tgtFolder}\""
+            log.info ("Ray :: cloneImage: command: ${command}")
             def out = executeCommand(command, opts)
+            log.info ("Ray :: cloneImage: out?.success: ${out?.success}")
             command = "xcopy \"${srcImage}\" \"${tgtFolder}\" /y /i /r /h /s"
+            log.info ("Ray :: cloneImage: command1: ${command}")
             log.debug("cloneImage command: ${command}")
             out = executeCommand(command, opts)
+            log.info ("Ray :: cloneImage: out?.success1: ${out?.success}")
             log.info("cloneImage: ${out}")
             if (out.success == true) {
                 command = "dir \"${tgtFolder}\""
+                log.info ("Ray :: cloneImage: command2: ${command}")
                 out = executeCommand(command, opts)
+                log.info ("Ray :: cloneImage: out?.success2: ${out?.success}")
                 rtn.targetPath = tgtFolder
                 rtn.success = out.success
             }
         } catch (e) {
             log.error("cloneImage error: ${e}", e)
         }
+        log.info ("Ray :: cloneImage: rtn: ${rtn}")
         return rtn
     }
 
@@ -121,19 +163,27 @@ class HyperVApiService {
     }
 
     def findImage(opts, imageName) {
+        log.info ("Ray :: findImage: opts: ${opts}")
+        log.info ("Ray :: findImage: imageName: ${imageName}")
         def rtn = [success: false, imageExists: false]
         def zoneRoot = opts.zoneRoot ?: defaultRoot
         def imageFolder = formatImageFolder(imageName)
+        log.info ("Ray :: findImage: imageFolder: ${imageFolder}")
         def imageFolderPath = "${zoneRoot}\\images\\${imageFolder}"
+        log.info ("Ray :: findImage: imageFolderPath: ${imageFolderPath}")
         def command = "dir \"${imageFolderPath}\""
+        log.info ("Ray :: findImage: command: ${command}")
         log.debug("findImage command: ${command}")
         def out = executeCommand(command, opts)
+        log.info ("Ray :: findImage: out?.success: ${out?.success}")
+        log.info ("Ray :: findImage: out?.data: ${out?.data}")
         log.info("findImage: ${out.data}")
         rtn.success = out.success
         if (out.data?.length() > 0) {
             rtn.imageExists = true
             rtn.imageName = imageName
         }
+        log.info ("Ray :: findImage: rtn: ${rtn}")
         return rtn
     }
 
@@ -247,22 +297,34 @@ class HyperVApiService {
 
     def cloneServer(opts) {
         log.debug "cloneServer opts: ${opts}"
+        log.info ("Ray :: cloneServer: opts: ${opts}")
         def rtn = [success: false]
         try {
             def imageName = opts.imageId
+            log.info ("Ray :: cloneServer: imageName: ${imageName}")
             def cloneResults = cloneImage(opts, imageName, opts.serverFolder)
             log.info "cloneResults: ${cloneResults}"
+            log.info ("Ray :: cloneServer: cloneResults: ${cloneResults}")
+            log.info ("Ray :: cloneServer: cloneResults.success: ${cloneResults.success}")
             if (cloneResults.success == true) {
                 def disks = [osDisk: [:], dataDisks: []]
                 def diskRoot = opts.diskRoot
+                log.info ("Ray :: cloneServer: diskRoot: ${diskRoot}")
                 def vmRoot = opts.vmRoot
+                log.info ("Ray :: cloneServer: vmRoot: ${vmRoot}")
                 def imageFolderName = opts.serverFolder
+                log.info ("Ray :: cloneServer: imageFolderName: ${imageFolderName}")
                 def networkName = opts.network?.name
+                log.info ("Ray :: cloneServer: networkName: ${networkName}")
                 def diskFolder = "${diskRoot}\\${imageFolderName}"
+                log.info ("Ray :: cloneServer: diskFolder: ${diskFolder}")
                 def bootDiskName = opts.diskMap?.bootDisk?.fileName ?: 'morpheus-ubuntu-22_04-amd64-20240604.vhd' //'ubuntu-14_04.vhd'
+                log.info ("Ray :: cloneServer: bootDiskName: ${bootDiskName}")
                 disks.osDisk = [externalId: bootDiskName]
                 def osDiskPath = diskFolder + '\\' + bootDiskName
+                log.info ("Ray :: cloneServer: osDiskPath: ${osDiskPath}")
                 def vmFolder = "${vmRoot}\\${imageFolderName}"
+                log.info ("Ray :: cloneServer: vmFolder: ${vmFolder}")
                 //network config
                 def additionalNetworks = []
                 if (opts.networkConfig?.primaryInterface?.network?.externalId) { //new style multi network
@@ -320,9 +382,12 @@ class HyperVApiService {
                         }
                     }
                     //resize disk
+                    log.info ("Ray :: cloneServer: opts.osDiskSize: ${opts.osDiskSize}")
                     if (opts.osDiskSize)
                         resizeDisk(opts, osDiskPath, opts.osDiskSize)
                     //add disk
+                    log.info ("Ray :: cloneServer: opts.dataDisks?.size(): ${opts.dataDisks?.size()}")
+                    log.info ("Ray :: cloneServer: opts.dataDiskSize: ${opts.dataDiskSize}")
                     if (opts.dataDisks?.size() > 0) {
                         opts.dataDisks?.eachWithIndex { disk, index ->
                             def diskIndex = "${index + 1}"
@@ -387,6 +452,7 @@ class HyperVApiService {
         } catch (e) {
             log.error("cloneServer error: ${e}", e)
         }
+        log.info ("Ray :: cloneServer: rtn: ${rtn}")
         return rtn
     }
 
