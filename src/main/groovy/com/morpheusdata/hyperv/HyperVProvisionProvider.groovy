@@ -1140,9 +1140,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 
 			def requestedMemory = resizeRequest.maxMemory
 			def requestedCores = resizeRequest?.maxCores
-			log.info("RAZI :: requestedMemory: ${requestedMemory}")
-			log.info("RAZI :: requestedCores: ${requestedCores}")
-
+			:
 			def currentMemory
 			def currentCores
 			log.info("RAZI :: isWorkload: ${isWorkload}")
