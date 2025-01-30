@@ -1126,7 +1126,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	ServiceResponse resizeServer(ComputeServer computeServer, ResizeRequest resizeRequest, Map opts) {
 		log.info("resizeServer calling resizeWorkloadAndServer")
 		return resizeWorkloadAndServer(null, computeServer, resizeRequest, opts, false)
-		log.info("RAZI :: resizeWorkloadAndServer called SUCCESS")
 	}
 
 	private ServiceResponse resizeWorkloadAndServer(Workload workload, ComputeServer server, ResizeRequest resizeRequest, Map opts, Boolean isWorkload) {
