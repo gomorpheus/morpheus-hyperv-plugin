@@ -1475,16 +1475,21 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				log.debug("create server results:${createResults}")
 				if(createResults.success == true) {
 					def instance = createResults.server
+					log.info ("Ray :: runHost: instance: ${instance}")
 					if(instance) {
 						server.externalId = instance.id
 						server.parentServer = node
 						server = saveAndGetMorpheusServer(server, true)
 
 						def serverDetails = apiService.getServerDetails(hypervOpts, server.externalId)
+						log.info ("Ray :: runHost: serverDetails: ${serverDetails}")
+						log.info ("Ray :: runHost: serverDetails.success: ${serverDetails.success}")
 						if(serverDetails.success == true) {
 							//fill in ip address.
 							def newIpAddress = serverDetails.server?.ipAddress ?: createResults.server?.ipAddress
+							log.info ("Ray :: runHost: newIpAddress: ${newIpAddress}")
 							def macAddress = serverDetails.server?.macAddress
+							log.info ("Ray :: runHost: macAddress: ${macAddress}")
 							opts.network = applyComputeServerNetworkIp(server, newIpAddress, newIpAddress, 0, macAddress)
 							server = getMorpheusServer(server.id)
 							server.osDevice = '/dev/sda'
@@ -1515,6 +1520,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				server.statusMessage = 'Error creating server'
 			}
 			log.info("RAZI :: runHost >> server.interfaces.size(): ${server?.interfaces?.size()}")
+			log.info ("Ray :: runHost: provisionResponse.success: ${provisionResponse.success}")
 			if(provisionResponse.success != true) {
 				return new ServiceResponse(success: false, msg: provisionResponse.message ?: 'vm config error', error: provisionResponse.message, data: provisionResponse)
 			} else {
@@ -1531,19 +1537,36 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	ServiceResponse<ProvisionResponse> waitForHost(ComputeServer server){
 		log.debug("waitForHost: ${server}")
+		log.info ("Ray :: waitForHost: server?.id: ${server?.id}")
+		log.info ("Ray :: waitForHost: server?.name: ${server?.name}")
 		def provisionResponse = new ProvisionResponse()
 		ServiceResponse<ProvisionResponse> rtn = ServiceResponse.prepare(provisionResponse)
 		try {
 			def config = server.getConfigMap()
+			log.info ("Ray :: waitForHost: config: ${config}")
 			def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, server.cloud)
+			log.info ("Ray :: waitForHost: hypervOpts: ${hypervOpts}")
+			log.info ("Ray :: waitForHost: config.hostId: ${config.hostId}")
 			def node = config.hostId ? context.services.computeServer.get(config.hostId.toLong()) : pickHypervHypervisor(server.cloud)
+			log.info ("Ray :: waitForHost: node?.id: ${node?.id}")
+			log.info ("Ray :: waitForHost: node?.name: ${node?.name}")
 			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
+			log.info ("Ray :: waitForHost: hypervOpts1: ${hypervOpts}")
 			def serverDetail = apiService.checkServerReady(hypervOpts, server.externalId)
+			log.info ("Ray :: waitForHost: serverDetail: ${serverDetail}")
+			log.info ("Ray :: waitForHost: serverDetail.success: ${serverDetail.success}")
+			log.info ("Ray :: waitForHost: serverDetail.server: ${serverDetail.server}")
 			if (serverDetail.success == true) {
-				provisionResponse.privateIp = serverDetail.ipAddress
-				provisionResponse.publicIp = serverDetail.ipAddress
+				log.info ("Ray :: waitForHost: serverDetail.ipAddress: ${serverDetail.ipAddress}")
+				log.info ("Ray :: waitForHost: serverDetail.server.ipAddress: ${serverDetail.server.ipAddress}")
+				log.info ("Ray :: waitForHost: serverDetail.server.ipAddressList: ${serverDetail.server.ipAddressList}")
+				provisionResponse.privateIp = serverDetail.server.ipAddress
+				provisionResponse.publicIp = serverDetail.server.ipAddress
 				provisionResponse.externalId = server.externalId
+				log.info ("Ray :: waitForHost: calling finalizeHost.......")
 				def finalizeResults = finalizeHost(server)
+				log.info ("Ray :: waitForHost: finalizeResults: ${finalizeResults}")
+				log.info ("Ray :: waitForHost: finalizeResults.success: ${finalizeResults.success}")
 				if(finalizeResults.success == true) {
 					provisionResponse.success = true
 					rtn.success = true
@@ -1554,6 +1577,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			rtn.success = false
 			rtn.msg = "Error in waiting for Host: ${e}"
 		}
+		log.info ("Ray :: waitForHost: rtn: ${rtn}")
 		return rtn
 	}
 
@@ -1564,38 +1588,34 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 
 	@Override
 	ServiceResponse finalizeHost(ComputeServer server) {
-		ServiceResponse rtn = ServiceResponse.prepare()
+		ServiceResponse rtn = ServiceResponse.success()
 		log.debug("finalizeHost: ${server?.id}")
+		log.info ("Ray :: finalizeHost: server?.id: ${server?.id}")
+		log.info ("Ray :: finalizeHost: server?.name: ${server?.name}")
 		log.info("RAZI :: finalizeHost >> server.interfaces.size()1: ${server.interfaces.size()}")
 		try {
 			def config = server.getConfigMap()
+			log.info ("Ray :: finalizeHost: config: ${config}")
 			def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, server.cloud)
+			log.info ("Ray :: finalizeHost: hypervOpts: ${hypervOpts}")
+			log.info ("Ray :: finalizeHost: config.hostId: ${config.hostId}")
 			def node = config.hostId ? context.services.computeServer.get(config.hostId.toLong()) : pickHypervHypervisor(server.cloud)
+			log.info ("Ray :: finalizeHost: node: ${node}")
+			log.info ("Ray :: finalizeHost: node?.id: ${node?.id}")
+			log.info ("Ray :: finalizeHost: node?.name: ${node?.name}")
 			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
+			log.info ("Ray :: finalizeHost: hypervOpts1: ${hypervOpts}")
 			def serverDetail = apiService.checkServerReady(hypervOpts, server.externalId)
+			log.info ("Ray :: finalizeHost: serverDetail: ${serverDetail}")
+			log.info ("Ray :: finalizeHost: serverDetail.server: ${serverDetail.server}")
+			log.info ("Ray :: finalizeHost: serverDetail.success: ${serverDetail.success}")
 			if (serverDetail.success == true){
-				serverDetail.ipAddresses.each { interfaceName, data ->
-					ComputeServerInterface netInterface = server.interfaces?.find{it.name == interfaceName}
-					if(netInterface) {
-						if(data.ipAddress) {
-							def address = new NetAddress(address: data.ipAddress, type: NetAddress.AddressType.IPV4)
-							if(!NetworkUtility.validateIpAddr(address.address)){
-								log.debug("NetAddress Errors: ${address}")
-							}
-							netInterface.addresses << address
-							netInterface.publicIpAddress = data.ipAddress
-						}
-						if(data.ipv6Address && isValidIpv6Address(data.ipv6Address)) {
-							def address = new NetAddress(address: data.ipv6Address, type: NetAddress.AddressType.IPV6)
-							netInterface.addresses << address
-							netInterface.publicIpv6Address = data.ipv6Address
-						}
-						context.async.computeServer.computeServerInterface.save([netInterface]).blockingGet()
-					}
-				}
-//				def newIpAddress = serverDetail.server?.ipAddress
-//				def macAddress = serverDetail.server?.macAddress
-//				applyComputeServerNetworkIp(server, newIpAddress, newIpAddress, 0, macAddress)
+				rtn.success = true
+				log.info ("Ray :: finalizeHost: serverDetail.server.ipAddressList3Feb: ${serverDetail.server.ipAddressList}")
+				log.info ("Ray :: finalizeHost: error code removed......")
+				def newIpAddress = serverDetail.server?.ipAddress
+				def macAddress = serverDetail.server?.macAddress
+				applyComputeServerNetworkIp(server, newIpAddress, newIpAddress, 0, macAddress)
 				context.async.computeServer.save(server).blockingGet()
 				log.info("RAZI :: finalizeHost >> server.interfaces.size()2: ${server.interfaces.size()}")
 				rtn.success = true
@@ -1605,6 +1625,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			rtn.msg = "Error in finalizing server: ${e.message}"
 			log.error("Error in finalizeHost: ${e.message}", e)
 		}
+		log.info ("Ray :: finalizeHost: rtn: ${rtn}")
 		return rtn
 	}
 

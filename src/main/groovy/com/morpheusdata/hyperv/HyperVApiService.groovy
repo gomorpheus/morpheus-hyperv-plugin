@@ -200,9 +200,18 @@ class HyperVApiService {
     }
 
     def resizeDisk(opts, diskPath, diskSize) {
+        log.info ("Ray :: resizeDisk: opts: ${opts}")
+        log.info ("Ray :: resizeDisk: diskPath: ${diskPath}")
+        log.info ("Ray :: resizeDisk: diskSize: ${diskSize}")
         def command = "Resize-VHD -Path \"${diskPath}\" -SizeBytes ${diskSize}"
+        log.info ("Ray :: resizeDisk: command: ${command}")
         log.debug "resizeDisk: ${command}"
-        return executeCommand(command, opts)
+        def out = executeCommand(command, opts)
+        log.info ("Ray :: resizeDisk: out?.success: ${out?.success}")
+        log.info ("Ray :: resizeDisk: out?.data: ${out?.data}")
+        log.info ("Ray :: resizeDisk: out?.error: ${out?.error}")
+        log.info ("Ray :: resizeDisk: out?.exitCode: ${out?.exitCode}")
+        return out
     }
 
     def detachDisk(opts, vmId, controllerType, controllerNumber, controllerLocation) {
@@ -344,6 +353,7 @@ class HyperVApiService {
                 if (osDiskPath.endsWith('.vhdx')) {
                     generation = 2
                 }
+                log.info ("Ray :: cloneServer: generation: ${generation}")
                 def launchCommand = "New-VM -Name \"${opts.name}\" -MemoryStartupBytes ${opts.memory} -Generation ${generation} -VHDPath \"${osDiskPath}\" " +
                         "-BootDevice VHD -Path \"${vmFolder}\" -SwitchName \"${networkName}\" "
                 //-ComputerName ${opts.name}
@@ -353,8 +363,10 @@ class HyperVApiService {
                 //[-Path <String> ] [-SwitchName <String> ] [-Confirm] [-WhatIf] [ <CommonParameters>]
                 //run it
                 log.info("launchCommand: ${launchCommand}")
+                log.info ("Ray :: cloneServer: launchCommand: ${launchCommand}")
                 def out = executeCommand(launchCommand, opts)
                 log.debug("run server: ${out}")
+                log.info ("Ray :: cloneServer: out.success: ${out.success}")
                 if (out.success == true) {
                     //we need to fix SecureBoot
                     String secureBootCommand
@@ -371,6 +383,7 @@ class HyperVApiService {
                         executeCommand(setVlanCommand, opts)
                     }
                     //add additional NICS
+                    log.info ("Ray :: cloneServer: additionalNetworks: ${additionalNetworks}")
                     if (additionalNetworks) {
                         additionalNetworks.each { additionalNetwork ->
                             def addNetworkCommand = "Add-VMNetworkAdapter -VMName \"${opts.name}\" -Name \"${additionalNetwork.name}\" -SwitchName \"${additionalNetwork.switchName}\""
@@ -416,6 +429,8 @@ class HyperVApiService {
                         attachDisk(opts, opts.name, newDiskPath)
                     }
                     //cpu
+                    log.info ("Ray :: cloneServer: opts.maxCores: ${opts.maxCores}")
+                    log.info ("Ray :: cloneServer: opts.maxCores: ${opts.maxCores}")
                     if (opts.maxCores && opts.maxCores > 0) {
                         updateServer(opts, opts.name, [maxCores: opts.maxCores])
                     }
@@ -435,10 +450,13 @@ class HyperVApiService {
                     //start it
                     sleep(10000) // just a test
                     log.info("Starting Server  ${opts.name}")
+                    log.info ("Ray :: cloneServer: Starting Server: opts.name: ${opts.name}")
                     startServer(opts, opts.name)
                     //get details
                     log.info("Hyperv Check for Server Ready ${opts.name}")
                     def serverDetail = checkServerReady(opts, opts.name)
+                    log.info ("Ray :: cloneServer: serverDetail: ${serverDetail}")
+                    log.info ("Ray :: cloneServer: serverDetail.success: ${serverDetail.success}")
                     if (serverDetail.success == true) {
                         // write ip address to notes here
                         updateServer(opts, opts.name, [notes: serverDetail.server?.ipAddress])
@@ -564,21 +582,29 @@ class HyperVApiService {
     }
 
     def checkServerReady(opts, vmId) {
+        log.info ("Ray :: checkServerReady: opts: ${opts}")
+        log.info ("Ray :: checkServerReady: vmId: ${vmId}")
         def rtn = [success: false]
         try {
             def pending = true
             def attempts = 0
             while (pending) {
+                log.info ("Ray :: checkServerReady: pending: ${pending}")
                 sleep(1000l * 5l)
                 def serverDetail = getServerDetails(opts, vmId)
+                log.info ("Ray :: checkServerReady: serverDetail: ${serverDetail}")
+                log.info ("Ray :: checkServerReady: serverDetail.success: ${serverDetail.success}")
                 log.debug("checkServerReady: serverDetail: ${serverDetail}")
                 if (serverDetail.success == true) {
+                    log.info ("Ray :: checkServerReady: serverDetail.server.ipAddress: ${serverDetail.server.ipAddress}")
                     if (serverDetail.server.ipAddress) {
                         rtn.success = true
                         rtn.server = serverDetail.server
                         pending = false
                     } else {
                         log.info("check server loading newServer: ip: ${opts.newServer.internalIp}")
+                        log.info ("Ray :: checkServerReady: opts.newServer: ${opts.newServer}")
+                        log.info ("Ray :: checkServerReady: opts.newServer?.internalIp: ${opts.newServer?.internalIp}")
                         if (opts.newServer.internalIp) {
                             rtn.success = true
                             rtn.server = serverDetail.server
@@ -590,26 +616,44 @@ class HyperVApiService {
                 attempts++
                 if (attempts > 100)
                     pending = false
+                log.info ("Ray :: checkServerReady: attempts1: ${attempts}")
+                log.info ("Ray :: checkServerReady: pending1: ${pending}")
             }
         } catch (e) {
             log.error("An Exception Has Occurred", e)
         }
+        log.info ("Ray :: checkServerReady: rtn: ${rtn}")
         return rtn
     }
 
     def getServerDetails(opts, vmId) {
+        log.info ("Ray :: getServerDetails: opts: ${opts}")
+        log.info ("Ray :: getServerDetails: vmId: ${vmId}")
         def rtn = [success: false]
         try {
             def command = "Get-VM -Name \"${vmId}\" | Format-List VMname, VMID, Status, Uptime, State, CpuUsage, MemoryAssigned, ComputerName"
+            log.info ("Ray :: getServerDetails: command: ${command}")
             def results = executeCommand(command, opts)
+            log.info ("Ray :: getServerDetails: results: ${results}")
+            log.info ("Ray :: getServerDetails: results?.success: ${results?.success}")
+            log.info ("Ray :: getServerDetails: results?.data22222: ${results?.data}")
+            log.info ("Ray :: getServerDetails: results?.exitCode: ${results?.exitCode}")
             if (results.success == true && results.exitCode == '0') {
                 def vmData = parseVmDetails(results.data)
+                log.info ("Ray :: getServerDetails: vmData: ${vmData}")
+                log.info ("Ray :: getServerDetails: vmData?.success: ${vmData?.success}")
                 if (vmData.success == true) {
                     command = "Get-VMNetworkAdapter -VMName \"${vmId}\" | Format-List"
+                    log.info ("Ray :: getServerDetails: command2: ${command}")
                     results = executeCommand(command, opts)
+                    log.info ("Ray :: getServerDetails: results?.success1: ${results?.success}")
+                    log.info ("Ray :: getServerDetails: results?.exitCode1: ${results?.exitCode}")
+                    log.info ("Ray :: getServerDetails: results?.data11111: ${results?.data}")
                     if (results.success == true && results.exitCode == '0') {
                         log.debug("network data: ${results.data}")
+                        log.info ("Ray :: getServerDetails: results?.data111: ${results?.data}")
                         def vmNetworkData = parseVmNetworkDetails(results.data)
+                        log.info ("Ray :: getServerDetails: vmNetworkData: ${vmNetworkData}")
                         //parse it
                         rtn.server = vmData + vmNetworkData
                         rtn.success = true
@@ -621,6 +665,7 @@ class HyperVApiService {
             log.error("An Exception Has Occurred for getServerDetails: ${e.message}", e)
         }
         log.debug("getServerDetails: ${rtn}")
+        log.info ("Ray :: getServerDetails: rtn: ${rtn}")
         return rtn
     }
 
@@ -1007,12 +1052,14 @@ class HyperVApiService {
     }
 
     def parseVmNetworkDetails(data) {
+        log.info ("Ray :: parseVmNetworkDetails: data: ${data}")
         //Get-VMNetworkAdapter -VMName bw-hyperv-node-2
         //Name            IsManagementOs VMName           SwitchName MacAddress   Status IPAddresses
         //----            -------------- ------           ---------- ----------   ------ -----------
         //Network Adapter False          bw-hyperv-node-2 wheeler    00155D2D5B15 {Ok}   {}
         def rtn = [success: false]
         def vmData = parseHypervListData(data)
+        log.info ("Ray :: parseVmNetworkDetails: vmData: ${vmData}")
         if (vmData) {
             rtn.device = vmData.Name
             rtn.managementOs = vmData.IsManagementOs
@@ -1021,42 +1068,62 @@ class HyperVApiService {
             rtn.macAddress = vmData.MacAddress
             rtn.status = vmData.Status
             rtn.ipAddressList = vmData.IPAddresses
+            log.info ("Ray :: parseVmNetworkDetails: vmData.IPAddresses: ${vmData.IPAddresses}")
+            log.info ("Ray :: parseVmNetworkDetails: rtn.ipAddressList: ${rtn.ipAddressList}")
             def ipParse = parseIpAddressList(rtn.ipAddressList)
+            log.info ("Ray :: parseVmNetworkDetails: ipParse: ${ipParse}")
+            log.info ("Ray :: parseVmNetworkDetails: ipParse.ipv6address: ${ipParse.ipv6address}")
+            log.info ("Ray :: parseVmNetworkDetails: ipParse.ipAddress: ${ipParse.ipAddress}")
             if (ipParse.ipv6address)
                 rtn.ipv6address = ipParse.ipv6address
             if (ipParse.ipAddress)
                 rtn.ipAddress = ipParse.ipAddress
             rtn.success = true
         }
+        log.info ("Ray :: parseVmNetworkDetails: rtn: ${rtn}")
         return rtn
     }
 
     def parseIpAddressList(data) {
+        log.info ("Ray :: parseIpAddressList: data: ${data}")
         def rtn = [:]
+        log.info ("Ray :: parseIpAddressList: data?.length(): ${data?.length()}")
         if (data?.length() > 2) {
             data = data.substring(1, data.length() - 1)
+            log.info ("Ray :: parseIpAddressList: data1: ${data}")
+            log.info ("Ray :: parseIpAddressList: data?.length()111: ${data?.length()}")
             if (data?.length() > 0) {
                 def ipList = data.tokenize(',')
+                log.info ("Ray :: parseIpAddressList: ipList: ${ipList}")
                 ipList?.each { ip ->
+                    log.info ("Ray :: parseIpAddressList: ip: ${ip}")
+                    log.info ("Ray :: parseIpAddressList: ip.indexOf(':'): ${ip.indexOf(':')}")
+                    log.info ("Ray :: parseIpAddressList: ip.indexOf('.'): ${ip.indexOf('.')}")
                     if (ip.indexOf(':') > -1) {
                         rtn.ipv6address = ip.trim()
+                        log.info ("Ray :: parseIpAddressList: rtn.ipv6address: ${rtn.ipv6address}")
                     } else if (ip.indexOf('.') > -1) {
                         def newIp = ip.trim()
+                        log.info ("Ray :: parseIpAddressList: newIp: ${newIp}")
+                        log.info ("Ray :: parseIpAddressList: newIp.startsWith('169.'): ${newIp.startsWith('169.')}")
                         if (!newIp.startsWith('169.'))
                             rtn.ipAddress = ip.trim()
                     }
                 }
             }
         }
+        log.info ("Ray :: parseIpAddressList: rtn: ${rtn}")
         return rtn
     }
 
     def parseVmDetails(data) {
+        log.info ("Ray :: parseVmDetails: data: ${data}")
         //Name             State   CPUUsage(%) MemoryAssigned(M) Uptime     Status
         //----             -----   ----------- ----------------- ------     ------
         //bw-hyperv-node-2 Running 0           2048              1.00:51:05 Operating normally
         def rtn = [success: false]
         def vmData = parseHypervListData(data)
+        log.info ("Ray :: parseVmDetails: vmData: ${vmData}")
         if (vmData) {
             rtn.name = vmData.Name
             rtn.powerState = vmData.State
@@ -1068,6 +1135,7 @@ class HyperVApiService {
             rtn.hostName = vmData.ComputerName
             rtn.success = true
         }
+        log.info ("Ray :: parseVmDetails: rtn: ${rtn}")
         return rtn
     }
 
@@ -1148,19 +1216,31 @@ class HyperVApiService {
     }
 
     def parseHypervListData(data) {
+        log.info ("Ray :: parseHypervListDatawithoutsplit: data: ${data}")
         def rtn = [:]
         def lines = data?.tokenize('\n')
+        log.info ("Ray :: parseHypervListData: lines: ${lines}")
         lines = lines?.findAll { it.length() > 1 }
+        log.info ("Ray :: parseHypervListData: lines1: ${lines}")
         log.debug("lines: ${lines}")
+        log.info ("Ray :: parseHypervListData: lines?.size(): ${lines?.size()}")
         if (lines?.size() > 1) {
             lines.eachWithIndex { line, index ->
+                log.info ("Ray :: parseHypervListData: line: ${line}")
+                log.info ("Ray :: parseHypervListData: index: ${index}")
+                log.info ("Ray :: parseHypervListData: line.indexOf(':'): ${line.indexOf(':')}")
                 if (line.indexOf(':') > -1) {
                     def lineTokens = line.tokenize(':')
+                    log.info ("Ray :: parseHypervListData: lineTokens: ${lineTokens}")
+                    log.info ("Ray :: parseHypervListData: rtn[lineTokens[0].trim()]: ${rtn[lineTokens[0].trim()]}")
+                    log.info ("Ray :: parseHypervListData: lineTokens[0].trim(): ${lineTokens[0].trim()}")
+                    log.info ("Ray :: parseHypervListData: lineTokens[1].trim(): ${lineTokens[1].trim()}")
                     rtn[lineTokens[0].trim()] = lineTokens[1].trim()
                 }
             }
             log.debug("parseHypervListData: ${rtn}")
         }
+        log.info ("Ray :: parseHypervListData: rtn: ${rtn}")
         return rtn
     }
 
