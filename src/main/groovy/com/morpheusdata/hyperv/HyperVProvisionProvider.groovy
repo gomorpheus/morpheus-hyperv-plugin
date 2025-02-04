@@ -1303,6 +1303,12 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 
 			computeServer.status = 'provisioned'
 			computeServer = saveAndGet(computeServer)
+			log.info ("Ray :: resizeWorkloadAndServer: stopResults11112: ${stopResults}")
+			if (stopResults) {
+				log.info ("Ray :: resizeWorkloadAndServer: isWorkload111: ${isWorkload}")
+				def startResults = isWorkload ? startWorkload(workload) : startServer(computeServer)
+				log.info ("Ray :: resizeWorkloadAndServer: startResults.succcess: ${startResults.success}")
+			}
 			rtn.success = true
 			log.info("RAZI :: rtn.success: ${rtn.success}")
 		} catch (e) {
