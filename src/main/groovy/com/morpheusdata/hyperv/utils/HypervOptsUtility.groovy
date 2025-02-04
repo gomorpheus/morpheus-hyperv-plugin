@@ -19,6 +19,33 @@ class HypervOptsUtility {
         return rtn
     }
 
+    static getServerRootSize(server) {
+        def rtn
+        def rootDisk = getServerRootDisk(server)
+        if (rootDisk)
+            rtn = rootDisk.maxStorage
+        else
+            rtn = server.maxStorage ?: server.plan.maxStorage
+        return rtn
+    }
+    static getServerRootDisk(server) {
+        def rtn = server?.volumes?.find { it.rootVolume == true }
+        return rtn
+    }
+    static getServerVolumeSize(server) {
+        def rtn = server.maxStorage ?: server.plan.maxStorage
+        if (server?.volumes?.size() > 0) {
+            def newMaxStorage = server.volumes.sum { it.maxStorage ?: 0 }
+            if (newMaxStorage > rtn)
+                rtn = newMaxStorage
+        }
+        return rtn
+    }
+    static getServerDataDiskList(server) {
+        def rtn = server?.volumes?.findAll { it.rootVolume == false }?.sort { it.id }
+        return rtn
+    }
+
     static getHypervServerOpts(MorpheusContext context, server) {
         def zoneConfig = server.cloud.getConfigMap()
         def serverName = server.name //cleanName(server.name)
@@ -27,15 +54,14 @@ class HypervOptsUtility {
         def maxMemory = server.maxMemory ?:server.plan.maxMemory
         def maxCpu = server.maxCpu ?:server.plan?.maxCpu ?:1
         def maxCores = server.maxCores ?:server.plan.maxCores ?:1
-        // TODO: below lines are commented for now, need to work on this if its needed.
-        /*def maxStorage = getServerRootSize(server)
+        def maxStorage = getServerRootSize(server)
         def maxTotalStorage = getServerVolumeSize(server)
-        def dataDisks = getServerDataDiskList(server)*/
+        def dataDisks = getServerDataDiskList(server)
         def network = context.services.network.get(serverConfig.networkId?.toLong())
         def serverFolder = "morpheus_server_${server.id}"
         return [name:serverName, config:serverConfig, server:server, memory:maxMemory, maxCores:maxCores, serverFolder:serverFolder,
-                hostname:server.getExternalHostname(), network:network]
-//                osDiskSize:maxStorage, maxTotalStorage:maxTotalStorage, dataDisks:dataDisks]
+                hostname:server.getExternalHostname(), network:network, maxCpu: maxCpu,
+                osDiskSize:maxStorage, maxTotalStorage:maxTotalStorage, dataDisks:dataDisks]
     }
 
     static getAllHypervWorloadOpts(MorpheusContext context, workload) {
@@ -53,17 +79,47 @@ class HypervOptsUtility {
         def containerConfig = container.getConfigMap()
         def network = context.services.network.get(containerConfig.networkId?.toLong())
         def serverFolder = "morpheus_server_${container.server.id}"
-        def rootVolume = container.server.volumes?.find{it.rootVolume == true}
+        def rootVolume = container.server.volumes?.find { it.rootVolume == true }
         def maxMemory = container.maxMemory ?: container.instance.plan.maxMemory
         def maxCpu = container.maxCpu ?: container.instance.plan?.maxCpu ?: 1
         def maxCores = container.maxCores ?: container.instance.plan.maxCores ?: 1
-        // TODO: below lines are commented for now, need to work on this if its needed.
-        /*def maxStorage = getContainerRootSize(container)
+        def maxStorage = getContainerRootSize(container)
         def maxTotalStorage = getContainerVolumeSize(container)
-        def dataDisks = getContainerDataDiskList(container)*/
+        def dataDisks = getContainerDataDiskList(container)
         def platform = (container.server.serverOs?.platform == 'windows' || container.server.osType == 'windows') ? 'windows' : 'linux'
-        return [config:serverConfig, vmId: container.server.externalId, name: container.server.externalId, server:container.server, memory:maxMemory,
-                maxCpu:maxCpu, maxCores:maxCores, serverFolder:serverFolder, hostname:container.server.getExternalHostname(), network:network, platform:platform]
+        return [config   : serverConfig, vmId: container.server.externalId, name: container.server.externalId, server: container.server, memory: maxMemory, osDiskSize: maxStorage, maxCpu: maxCpu,
+                maxCores : maxCores, serverFolder: serverFolder, hostname: container.server.getExternalHostname(), network: network, platform: platform,
+                dataDisks: dataDisks, maxTotalStorage: maxTotalStorage]
+    }
+
+    static getContainerRootSize(container) {
+        def rtn
+        def rootDisk = getContainerRootDisk(container)
+        if (rootDisk)
+            rtn = rootDisk.maxStorage
+        else
+            rtn = container.maxStorage ?: container.instance.plan.maxStorage
+        return rtn
+    }
+
+    static getContainerRootDisk(container) {
+        def rtn = container.server?.volumes?.find { it.rootVolume == true }
+        return rtn
+    }
+
+    static getContainerVolumeSize(container) {
+        def rtn = container.maxStorage ?: container.instance.plan.maxStorage
+        if (container.server?.volumes?.size() > 0) {
+            def newMaxStorage = container.server.volumes.sum { it.maxStorage ?: 0 }
+            if (newMaxStorage > rtn)
+                rtn = newMaxStorage
+        }
+        return rtn
+    }
+
+    static getContainerDataDiskList(container) {
+        def rtn = container.server?.volumes?.findAll { it.rootVolume == false }?.sort { it.id }
+        return rtn
     }
 
     static getHypervZoneOpts(MorpheusContext context, zone) {

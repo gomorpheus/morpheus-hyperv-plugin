@@ -1,9 +1,9 @@
-resource "workload-type" "ubuntu-hyperv-18_04" {
-  code             = "ubuntu-hyperv-18.04"
+resource "workload-type" "ubuntu-hyperv-24_04" {
+  code             = "ubuntu-hyperv-24.04"
   shortName        = "ubuntu"
-  name             = "Ubuntu 18.04"
+  name             = "Ubuntu 24.04"
   ports = [22]
-  containerVersion = "18.04"
+  containerVersion = "24.04"
   repositoryImage  = null
   entryPoint       = null
   serverType       = "vm"
@@ -12,43 +12,44 @@ resource "workload-type" "ubuntu-hyperv-18_04" {
   showServerLogs   = true
   checkTypeCode    = "containerCheck"
   mountPoint       = "/morpheus"
-  virtualImage     = virtual-image.hyperv-image-morpheus-ubuntu-18_04
+  virtualImage     = virtual-image.hyperv-image-morpheus-ubuntu-24_04
   containerPorts = ["ubuntu.22"]
   actions = ["ubuntu-remove-node"]
   provisionType    = "hyperv"
   backupType       = "hypervSnapshot"
 }
 
-resource "workload-type-set" "ubuntu-hyperv-18_04-set" {
-  code           = "ubuntu-hyperv-18.04-set"
-  workloadType   = workload-type.ubuntu-hyperv-18_04
+resource "workload-type-set" "ubuntu-hyperv-24_04-set" {
+  code           = "ubuntu-hyperv-24.04-set"
+  workloadType   = workload-type.ubuntu-hyperv-24_04
   priorityOrder  = 0
   dynamicCount   = true
   containerCount = 1
 }
 
-resource "instance-type-layout" "ubuntu-hyperv-18_04" {
-  code                     = "ubuntu-hyperv-18.04"
+resource "instance-type-layout" "ubuntu-hyperv-24_04" {
+  code                     = "ubuntu-hyperv-24.04"
   name                     = "Hyper-V VM"
-  sortOrder                = 18
+  sortOrder                = 24
   serverType               = "vm"
   supportsConvertToManaged = true
-  instanceVersion          = "18.04"
+  instanceVersion          = "24.04"
   description              = "This will provision a single process with no redundancy"
   instanceType             = "ubuntu"
   serverCount              = 1
   portCount                = 1
+  memoryRequirement        = (1024 * 1024 * 1024)
   enabled                  = true
   creatable                = true
-  workloads = [workload-type-set.ubuntu-hyperv-18_04-set]
+  workloads = [workload-type-set.ubuntu-hyperv-24_04-set]
   actions = ["ubuntu-add-node"]
   provisionType            = "hyperv"
 }
 
-resource "scale-action" "ubuntu-hyperv-18_04" {
-  code       = "ubuntu-hyperv-18.04"
+resource "scale-action" "ubuntu-hyperv-24_04" {
+  code       = "ubuntu-hyperv-24.04"
   scaleType  = "action"
-  layout     = instance-type-layout.ubuntu-hyperv-18_04
+  layout     = instance-type-layout.ubuntu-hyperv-24_04
   upAction   = "ubuntu-add-node"
   downAction = "ubuntu-remove-node"
 }
