@@ -475,7 +475,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	ServiceResponse<ProvisionResponse> runWorkload(Workload workload, WorkloadRequest workloadRequest, Map opts) {
 		log.debug "runWorkload: ${workload} ${workloadRequest} ${opts}"
-		log.info ("Ray :: runWorkload: opts: ${opts}")
 		ProvisionResponse provisionResponse = new ProvisionResponse(success: true)
 		def server = workload.server
 		def cloud = server.cloud
@@ -492,7 +491,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			String generation = 'generation1'
 			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
 			hypervOpts.hypervisor = node
-			log.info ("Ray :: runWorkload: hypervOpts: ${hypervOpts}")
 			if (containerConfig.imageId || containerConfig.template || workload.workloadType.virtualImage?.id) {
 				def virtualImageId = (containerConfig.imageId?.toLong() ?: containerConfig.template?.toLong() ?: server.sourceImage.id)
 				virtualImage = context.async.virtualImage.get(virtualImageId).blockingGet()
@@ -523,7 +521,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					hypervOpts.zone = cloud
 					log.debug "hypervOpts: ${hypervOpts}"
 					def imageResults = apiService.insertContainerImage(hypervOpts)
-					log.info ("Ray :: runWorkload: imageResults: ${imageResults}")
 					log.debug("imageResults: ${imageResults}")
 					if (imageResults.success == true) {
 						imageId = imageResults.imageId
@@ -567,7 +564,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			}
 
 			log.debug("imageid: ${imageId}")
-			log.info ("Ray :: runWorkload: imageId: ${imageId}")
 			if (imageId) {
 				opts.installAgent = virtualImage ? virtualImage.installAgent : true
 				def userGroups = workload.instance.userGroups?.toList() ?: []
@@ -621,8 +617,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				//create it
 				hypervOpts.newServer = server
 				def createResults = apiService.cloneServer(hypervOpts)
-				log.info ("Ray :: runWorkload: createResults.success: ${createResults?.success}")
-				log.info ("Ray :: runWorkload: createResults.server: ${createResults?.server}")
 				log.debug("createResults: ${createResults}")
 				if (createResults.success == true && createResults.server) {
 					server.externalId = createResults.server.externalId
@@ -684,7 +678,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				context.async.computeServer.save(server).blockingGet()
 			}
 			provisionResponse.noAgent = opts.noAgent ?: false
-			log.info ("Ray :: runWorkload: provisionResponse.success: ${provisionResponse.success}")
 			if (provisionResponse.success != true) {
 				return new ServiceResponse(success: false, msg: provisionResponse.message ?: 'vm config error', error: provisionResponse.message, data: provisionResponse)
 			} else {
@@ -1137,13 +1130,11 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 
 	private ServiceResponse resizeWorkloadAndServer(Workload workload, ComputeServer server, ResizeRequest resizeRequest, Map opts, Boolean isWorkload) {
 		log.debug("resizeWorkloadAndServer ${workload ? "workload" : "server"}.id: ${workload?.id ?: server?.id} - opts: ${opts}")
-		log.info ("Ray :: resizeWorkloadAndServer: isWorkload: ${isWorkload}")
 
 		ServiceResponse rtn = ServiceResponse.success()
 		ComputeServer computeServer = isWorkload ? getMorpheusServer(workload.server?.id) : getMorpheusServer(server.id)
 
 		try {
-			log.info ("Ray :: resizeWorkloadAndServer: computeServer.status: ${computeServer.status}")
 			computeServer.status = 'resizing'
 			computeServer = saveAndGet(computeServer)
 
@@ -1151,7 +1142,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			def requestedCores = resizeRequest?.maxCores
 			def currentMemory
 			def currentCores
-			log.info("RAZI :: isWorkload: ${isWorkload}")
 			if (isWorkload) {
 				currentMemory = workload.maxMemory ?: workload.getConfigProperty('maxMemory')?.toLong()
 				currentCores = workload.maxCores ?: 1
@@ -1159,20 +1149,12 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				currentMemory = computeServer.maxMemory ?: computeServer.getConfigProperty('maxMemory')?.toLong()
 				currentCores = server.maxCores ?: 1
 			}
-			log.info("RAZI :: currentMemory: ${currentMemory}")
-			log.info("RAZI :: currentCores: ${currentCores}")
 			def neededMemory = requestedMemory - currentMemory
 			def neededCores = (requestedCores ?: 1) - (currentCores ?: 1)
-			log.info("RAZI :: neededMemory: ${neededMemory}")
-			log.info("RAZI :: neededCores: ${neededCores}") //0
 
 			def vmId = computeServer.externalId
-			log.info("RAZI :: vmId: ${vmId}")
 			def hypervOpts = isWorkload ? HypervOptsUtility.getAllHypervWorloadOpts(context, workload) : HypervOptsUtility.getAllHypervServerOpts(context, computeServer)
-			log.info("RAZI :: hypervOpts: ${hypervOpts}")
 			def stopResults = isWorkload ? stopWorkload(workload) : stopServer(computeServer)
-			log.info("RAZI :: stopResults: ${stopResults}")
-			log.info ("Ray :: resizeWorkloadAndServer: stopResults?.success: ${stopResults?.success}")
 			if (stopResults.success == true) {
 				if (neededMemory != 0 || neededCores != 0) {
 					def resizeOpts = [:]
@@ -1180,17 +1162,12 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						resizeOpts.maxMemory = requestedMemory
 					if (neededCores != 0)
 						resizeOpts.maxCores = requestedCores
-					log.info("RAZI :: resizeOpts: ${resizeOpts}")
 					def resizeResults = apiService.updateServer(hypervOpts, vmId, resizeOpts)
-					log.info ("Ray :: resizeWorkloadAndServer: resizeResults?.success: ${resizeResults?.success}")
-					log.info("RAZI :: resizeResults: ${resizeResults}")
 					log.debug("resize results: ${resizeResults}")
 					if (resizeResults.success == true) {
 						//computeServer.plan = plan
 						computeServer.maxCores = (requestedCores ?: 1).toLong()
-						log.info("RAZI :: computeServer.maxCores: ${computeServer.maxCores}")
 						computeServer.maxMemory = requestedMemory.toLong()
-						log.info("RAZI :: computeServer.maxMemory: ${computeServer.maxMemory}")
 						computeServer = saveAndGet(computeServer)
 						if (isWorkload) {
 							workload.maxCores = (requestedCores ?: 1).toLong()
@@ -1204,11 +1181,8 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					log.debug "Same plan.. not updating"
 				}
 
-				log.info("RAZI :: opts.volumes: ${opts.volumes}")
 				if (opts.volumes && !rtn.error) {
 					def newCounter = computeServer.volumes?.size()
-					log.info("RAZI :: newCounter: ${newCounter}")
-					log.info("RAZI :: resizeRequest.volumesUpdate.size(): ${resizeRequest.volumesUpdate?.size()}")
 					resizeRequest.volumesUpdate?.each { volumeUpdate ->
 						StorageVolume existing = volumeUpdate.existingModel
 						Map updateProps = volumeUpdate.updateProps
@@ -1217,10 +1191,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 							def volumeId = existing.externalId
 							def diskSize = ComputeUtility.parseGigabytesToBytes(updateProps.size?.toLong())
 							def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${volumeId}"
-							log.info("RAZI :: volumesUpdate >> diskSize: ${diskSize}")
-							log.info("RAZI :: volumesUpdate >> diskPath: ${diskPath}")
 							def resizeResults = apiService.resizeDisk(hypervOpts, diskPath, diskSize)
-							log.info("RAZI :: volumesUpdate >> resizeResults: ${resizeResults}")
 
 							if (resizeResults.success == true) {
 								StorageVolume existingVolume = context.services.storageVolume.get(storageVolumeId)
@@ -1233,37 +1204,24 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						}
 					}
 
-					log.info("RAZI :: resizeRequest.volumesAdd.size(): ${resizeRequest.volumesAdd?.size()}")
 					resizeRequest.volumesAdd.each { volumeAdd ->
 						//new disk add it
 						def diskSize = ComputeUtility.parseGigabytesToBytes(volumeAdd.size?.toLong())
 						def diskName = getUniqueDataDiskName(computeServer, newCounter++)
 						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
-						log.info("RAZI :: volumesAdd >> diskSize: ${diskSize}")
-						log.info("RAZI :: volumesAdd >> diskName: ${diskName}")
-						log.info("RAZI :: volumesAdd >> diskPath: ${diskPath}")
 						def diskResults = apiService.createDisk(hypervOpts, diskPath, diskSize)
-						log.info("RAZI :: volumesAdd >> diskResults: ${diskResults}")
 						log.debug("create disk: ${diskResults.success}")
 
 						if (diskResults.success == true && diskResults.error != true) {
 							def attachResults = apiService.attachDisk(hypervOpts, vmId, diskPath)
-							log.info("RAZI :: attachResults.success: ${attachResults.success}")
-							log.info("RAZI :: attachResults.error: ${attachResults.error}")
 							log.debug("attach: ${attachResults.success}")
-                            log.info("RAZI :: attachResults.success == true && attachResults.error != true: ${attachResults.success == true && attachResults.error != true}")
 							if (attachResults.success == true && attachResults.error != true) {
 								def newVolume = buildStorageVolume(computeServer, volumeAdd, diskResults, newCounter)
-                                log.info("RAZI :: newVolume: ${newVolume}")
 								newVolume.maxStorage = volumeAdd.size.toInteger() * ComputeUtility.ONE_GIGABYTE
 								newVolume.externalId = diskName
-                                log.info("RAZI :: newVolume.maxStorage: ${newVolume.maxStorage}")
-                                log.info("RAZI :: newVolume.externalId: ${newVolume.externalId}")
 								context.async.storageVolume.create([newVolume], computeServer).blockingGet()
-                                log.info("RAZI :: new volume created")
 								computeServer = getMorpheusServer(computeServer.id)
 								newCounter++
-                                log.info("RAZI :: newVolume >> newCounter: ${newCounter}")
 							} else {
 								log.error "Error in attaching volume: ${attachResults}"
 								rtn.error = "Error in attaching volume"
@@ -1274,19 +1232,14 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						}
 					}
 
-					log.info("RAZI :: resizeRequest.volumesDelete.size(): ${resizeRequest.volumesDelete?.size()}")
 					resizeRequest.volumesDelete.each { volume ->
 						log.debug "Deleting volume : ${volume.externalId}"
 						def diskName = volume.externalId
 						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
 
-						log.info("RAZI :: volumesDelete >> volume.config: ${volume.config}")
 						def diskConfig = volume.config ?: getDiskConfig(computeServer, volume, hypervOpts)
-						log.info("RAZI :: volumesDelete >> diskConfig.ControllerType: ${diskConfig.ControllerType}")
-						log.info("RAZI :: volumesDelete >> diskConfig.ControllerNumber: ${diskConfig.ControllerNumber}")
-						log.info("RAZI :: volumesDelete >> diskConfig.ControllerLocation: ${diskConfig.ControllerLocation}")
 						def detachResults = apiService.detachDisk(hypervOpts, vmId, diskConfig.ControllerType, diskConfig.ControllerNumber, diskConfig.ControllerLocation)
-						log.debug ("RAZI :: volumesDelete >> detachResults.success: ${detachResults.success}")
+						log.debug ("detachResults.success: ${detachResults.success}")
 
 						log.debug ("detachResults.success: ${detachResults.success}")
 						if (detachResults.success == true) {
@@ -1303,14 +1256,10 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 
 			computeServer.status = 'provisioned'
 			computeServer = saveAndGet(computeServer)
-			log.info ("Ray :: resizeWorkloadAndServer: stopResults11112: ${stopResults}")
 			if (stopResults) {
-				log.info ("Ray :: resizeWorkloadAndServer: isWorkload111: ${isWorkload}")
 				def startResults = isWorkload ? startWorkload(workload) : startServer(computeServer)
-				log.info ("Ray :: resizeWorkloadAndServer: startResults.succcess: ${startResults.success}")
 			}
 			rtn.success = true
-			log.info("RAZI :: rtn.success: ${rtn.success}")
 		} catch (e) {
 			log.error("Unable to resize workload: ${e.message}", e)
 			computeServer.status = 'provisioned'
@@ -1319,7 +1268,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			rtn.success = false
 			rtn.setError("${e}")
 		}
-		log.info ("Ray :: resizeWorkloadAndServer: rtn: ${rtn}")
 		return rtn
 	}
 
@@ -1332,10 +1280,8 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	protected ComputeServer saveAndGet(ComputeServer server) {
 		def saveResult = context.async.computeServer.bulkSave([server]).blockingGet()
 		def updatedServer
-		log.info("RAZI :: saveAndGet >> saveResult.success: ${saveResult.success}")
 		if (saveResult.success == true) {
 			updatedServer = saveResult.persistedItems.find { it.id == server.id }
-			log.info("RAZI :: saveAndGet >> updatedServer: ${updatedServer}")
 		} else {
 			updatedServer = saveResult.failedItems.find { it.id == server.id }
 			log.warn("Error saving server: ${server?.id}")
@@ -1378,45 +1324,31 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	ServiceResponse<ProvisionResponse> runHost(ComputeServer server, HostRequest hostRequest, Map opts) {
 		log.debug("runHost: ${server} ${hostRequest} ${opts}")
-		log.info ("Ray :: runHost: opts: ${opts}")
 		ProvisionResponse provisionResponse = new ProvisionResponse()
 		try {
 			def config = server.getConfigMap()
-			log.info ("Ray :: runHost: config: ${config}")
 			Cloud cloud = server.cloud
 			def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, cloud)
-			log.info ("Ray :: runHost: hypervOpts: ${hypervOpts}")
 			def imageType = config.templateTypeSelect ?: 'default'
-			log.info ("Ray :: runHost: imageType: ${imageType}")
 			def imageId
 			def virtualImage
 			def node = config.hostId ? context.services.computeServer.get(config.hostId.toLong()) : pickHypervHypervisor(cloud)
 			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
 			def layout = server.layout
 			def typeSet = server.typeSet
-			log.info ("Ray :: runHost: hypervOpts1: ${hypervOpts}")
-			log.info ("Ray :: runHost: layout: ${layout}")
-			log.info ("Ray :: runHost: typeSet: ${typeSet}")
-			log.info ("Ray :: runHost: imageType: ${imageType}")
-			log.info ("Ray :: runHost: config.template: ${config.template}")
 			if(layout && typeSet) {
-				log.info ("Ray :: runHost: inside if")
 				virtualImage = typeSet.workloadType.virtualImage
 				imageId = virtualImage.externalId
 			} else if(imageType == 'custom' && config.template) {
-				log.info ("Ray :: runHost: inside else if")
 				def virtualImageId = config.template?.toLong()
 				virtualImage = morpheus.services.virtualImage.get(virtualImageId)
 				imageId = virtualImage.externalId
 			} else {
-				log.info ("Ray :: runHost: inside else")
 				virtualImage = new VirtualImage(code: 'hyperv.image.morpheus.ubuntu.16.04.3-v1.ubuntu.16.04.3.amd64') //better this later
 			}
-			log.info ("Ray :: runHost: imageId: ${imageId}")
 
 			if(!imageId) { //If its userUploaded and still needs uploaded
 				def cloudFiles = context.async.virtualImage.getVirtualImageFiles(virtualImage).blockingGet()
-				log.info ("Ray :: runHost: cloudFiles?.size(): ${cloudFiles?.size()}")
 
 				def containerImage = [
 						name			: virtualImage.name ?: typeSet.workloadType.imageCode,
@@ -1435,16 +1367,12 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				hypervOpts.virtualImage = virtualImage
 
 				log.debug "hypervOpts:${hypervOpts}"
-				log.info ("Ray :: runHost: hypervOpts2: ${hypervOpts}")
 				def imageResults = apiService.insertContainerImage(hypervOpts)
-				log.info ("Ray :: runHost: imageResults: ${imageResults}")
-				log.info ("Ray :: runHost: imageResults.success: ${imageResults.success}")
 				if(imageResults.success == true) {
 					imageId = imageResults.imageId
 				}
 			}
 
-			log.info ("Ray :: runHost: imageId1: ${imageId}")
 			if(imageId) {
 				server.sourceImage = virtualImage
 				server.serverOs = server.serverOs ?: virtualImage.osType
@@ -1454,14 +1382,12 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				hypervOpts.diskMap = context.services.virtualImage.getImageDiskMap(virtualImage)
 				server = saveAndGetMorpheusServer(server, true)
 				hypervOpts += HypervOptsUtility.getHypervServerOpts(context, server)
-				log.info("RAZI :: runHost >> hypervOpts: ${hypervOpts}")
 
 				hypervOpts.networkConfig = hostRequest.networkConfiguration
 				hypervOpts.cloudConfigUser = hostRequest.cloudConfigUser
 				hypervOpts.cloudConfigMeta = hostRequest.cloudConfigMeta
 				hypervOpts.cloudConfigNetwork = hostRequest.cloudConfigNetwork
 				hypervOpts.isSysprep = virtualImage?.isSysprep
-				log.info ("Ray :: runHost: hypervOpts3: ${hypervOpts}")
 
 				def isoBuffer = context.services.provision.buildIsoOutputStream(
 						hypervOpts.isSysprep, PlatformType.valueOf(server.osType), hypervOpts.cloudConfigMeta, hypervOpts.cloudConfigUser, hypervOpts.cloudConfigNetwork)
@@ -1475,27 +1401,20 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				hypervOpts.newServer = server
 
 				//create it in hyperv
-				log.info ("Ray :: runHost: hypervOpts4: ${hypervOpts}")
 				def createResults = apiService.cloneServer(hypervOpts)
-				log.info("RAZI :: runHost >> createResults: ${createResults}")
 				log.debug("create server results:${createResults}")
 				if(createResults.success == true) {
 					def instance = createResults.server
-					log.info ("Ray :: runHost: instance: ${instance}")
 					if(instance) {
 						server.externalId = instance.id
 						server.parentServer = node
 						server = saveAndGetMorpheusServer(server, true)
 
 						def serverDetails = apiService.getServerDetails(hypervOpts, server.externalId)
-						log.info ("Ray :: runHost: serverDetails: ${serverDetails}")
-						log.info ("Ray :: runHost: serverDetails.success: ${serverDetails.success}")
 						if(serverDetails.success == true) {
 							//fill in ip address.
 							def newIpAddress = serverDetails.server?.ipAddress ?: createResults.server?.ipAddress
-							log.info ("Ray :: runHost: newIpAddress: ${newIpAddress}")
 							def macAddress = serverDetails.server?.macAddress
-							log.info ("Ray :: runHost: macAddress: ${macAddress}")
 							opts.network = applyComputeServerNetworkIp(server, newIpAddress, newIpAddress, 0, macAddress)
 							server = getMorpheusServer(server.id)
 							server.osDevice = '/dev/sda'
@@ -1525,8 +1444,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			} else {
 				server.statusMessage = 'Error creating server'
 			}
-			log.info("RAZI :: runHost >> server.interfaces.size(): ${server?.interfaces?.size()}")
-			log.info ("Ray :: runHost: provisionResponse.success: ${provisionResponse.success}")
 			if(provisionResponse.success != true) {
 				return new ServiceResponse(success: false, msg: provisionResponse.message ?: 'vm config error', error: provisionResponse.message, data: provisionResponse)
 			} else {
@@ -1543,36 +1460,19 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	ServiceResponse<ProvisionResponse> waitForHost(ComputeServer server){
 		log.debug("waitForHost: ${server}")
-		log.info ("Ray :: waitForHost: server?.id: ${server?.id}")
-		log.info ("Ray :: waitForHost: server?.name: ${server?.name}")
 		def provisionResponse = new ProvisionResponse()
 		ServiceResponse<ProvisionResponse> rtn = ServiceResponse.prepare(provisionResponse)
 		try {
 			def config = server.getConfigMap()
-			log.info ("Ray :: waitForHost: config: ${config}")
 			def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, server.cloud)
-			log.info ("Ray :: waitForHost: hypervOpts: ${hypervOpts}")
-			log.info ("Ray :: waitForHost: config.hostId: ${config.hostId}")
 			def node = config.hostId ? context.services.computeServer.get(config.hostId.toLong()) : pickHypervHypervisor(server.cloud)
-			log.info ("Ray :: waitForHost: node?.id: ${node?.id}")
-			log.info ("Ray :: waitForHost: node?.name: ${node?.name}")
 			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
-			log.info ("Ray :: waitForHost: hypervOpts1: ${hypervOpts}")
 			def serverDetail = apiService.checkServerReady(hypervOpts, server.externalId)
-			log.info ("Ray :: waitForHost: serverDetail: ${serverDetail}")
-			log.info ("Ray :: waitForHost: serverDetail.success: ${serverDetail.success}")
-			log.info ("Ray :: waitForHost: serverDetail.server: ${serverDetail.server}")
 			if (serverDetail.success == true) {
-				log.info ("Ray :: waitForHost: serverDetail.ipAddress: ${serverDetail.ipAddress}")
-				log.info ("Ray :: waitForHost: serverDetail.server.ipAddress: ${serverDetail.server.ipAddress}")
-				log.info ("Ray :: waitForHost: serverDetail.server.ipAddressList: ${serverDetail.server.ipAddressList}")
 				provisionResponse.privateIp = serverDetail.server.ipAddress
 				provisionResponse.publicIp = serverDetail.server.ipAddress
 				provisionResponse.externalId = server.externalId
-				log.info ("Ray :: waitForHost: calling finalizeHost.......")
 				def finalizeResults = finalizeHost(server)
-				log.info ("Ray :: waitForHost: finalizeResults: ${finalizeResults}")
-				log.info ("Ray :: waitForHost: finalizeResults.success: ${finalizeResults.success}")
 				if(finalizeResults.success == true) {
 					provisionResponse.success = true
 					rtn.success = true
@@ -1583,7 +1483,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			rtn.success = false
 			rtn.msg = "Error in waiting for Host: ${e}"
 		}
-		log.info ("Ray :: waitForHost: rtn: ${rtn}")
 		return rtn
 	}
 
@@ -1596,34 +1495,18 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	ServiceResponse finalizeHost(ComputeServer server) {
 		ServiceResponse rtn = ServiceResponse.success()
 		log.debug("finalizeHost: ${server?.id}")
-		log.info ("Ray :: finalizeHost: server?.id: ${server?.id}")
-		log.info ("Ray :: finalizeHost: server?.name: ${server?.name}")
-		log.info("RAZI :: finalizeHost >> server.interfaces.size()1: ${server.interfaces.size()}")
 		try {
 			def config = server.getConfigMap()
-			log.info ("Ray :: finalizeHost: config: ${config}")
 			def hypervOpts = HypervOptsUtility.getHypervZoneOpts(context, server.cloud)
-			log.info ("Ray :: finalizeHost: hypervOpts: ${hypervOpts}")
-			log.info ("Ray :: finalizeHost: config.hostId: ${config.hostId}")
 			def node = config.hostId ? context.services.computeServer.get(config.hostId.toLong()) : pickHypervHypervisor(server.cloud)
-			log.info ("Ray :: finalizeHost: node: ${node}")
-			log.info ("Ray :: finalizeHost: node?.id: ${node?.id}")
-			log.info ("Ray :: finalizeHost: node?.name: ${node?.name}")
 			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
-			log.info ("Ray :: finalizeHost: hypervOpts1: ${hypervOpts}")
 			def serverDetail = apiService.checkServerReady(hypervOpts, server.externalId)
-			log.info ("Ray :: finalizeHost: serverDetail: ${serverDetail}")
-			log.info ("Ray :: finalizeHost: serverDetail.server: ${serverDetail.server}")
-			log.info ("Ray :: finalizeHost: serverDetail.success: ${serverDetail.success}")
 			if (serverDetail.success == true){
 				rtn.success = true
-				log.info ("Ray :: finalizeHost: serverDetail.server.ipAddressList3Feb: ${serverDetail.server.ipAddressList}")
-				log.info ("Ray :: finalizeHost: error code removed......")
 				def newIpAddress = serverDetail.server?.ipAddress
 				def macAddress = serverDetail.server?.macAddress
 				applyComputeServerNetworkIp(server, newIpAddress, newIpAddress, 0, macAddress)
 				context.async.computeServer.save(server).blockingGet()
-				log.info("RAZI :: finalizeHost >> server.interfaces.size()2: ${server.interfaces.size()}")
 				rtn.success = true
 			}
 		} catch (e){
@@ -1631,7 +1514,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			rtn.msg = "Error in finalizing server: ${e.message}"
 			log.error("Error in finalizeHost: ${e.message}", e)
 		}
-		log.info ("Ray :: finalizeHost: rtn: ${rtn}")
 		return rtn
 	}
 

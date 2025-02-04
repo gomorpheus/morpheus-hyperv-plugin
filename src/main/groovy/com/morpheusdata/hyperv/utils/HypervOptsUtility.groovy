@@ -54,13 +54,9 @@ class HypervOptsUtility {
         def maxMemory = server.maxMemory ?:server.plan.maxMemory
         def maxCpu = server.maxCpu ?:server.plan?.maxCpu ?:1
         def maxCores = server.maxCores ?:server.plan.maxCores ?:1
-        // TODO: below lines are commented for now, need to work on this if its needed.
         def maxStorage = getServerRootSize(server)
-        log.info("RAZI :: getHypervServerOpts >> maxStorage: ${maxStorage}")
         def maxTotalStorage = getServerVolumeSize(server)
-        log.info("RAZI :: getHypervServerOpts >> maxTotalStorage: ${maxTotalStorage}")
         def dataDisks = getServerDataDiskList(server)
-        log.info("RAZI :: getHypervServerOpts >> dataDisks: ${dataDisks}")
         def network = context.services.network.get(serverConfig.networkId?.toLong())
         def serverFolder = "morpheus_server_${server.id}"
         return [name:serverName, config:serverConfig, server:server, memory:maxMemory, maxCores:maxCores, serverFolder:serverFolder,
