@@ -4,13 +4,12 @@ import com.morpheusdata.PrepareHostResponse
 import com.morpheusdata.core.AbstractProvisionProvider
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
-import com.morpheusdata.core.providers.HostProvisionProvider
 import com.morpheusdata.core.data.DataQuery
 import com.morpheusdata.core.providers.HostProvisionProvider
-import com.morpheusdata.core.util.NetworkUtility
 import com.morpheusdata.core.providers.ProvisionProvider
 import com.morpheusdata.core.providers.WorkloadProvisionProvider
 import com.morpheusdata.core.util.ComputeUtility
+import com.morpheusdata.core.util.NetworkUtility
 import com.morpheusdata.hyperv.utils.HypervOptsUtility
 import com.morpheusdata.model.*
 import com.morpheusdata.model.provisioning.HostRequest
@@ -1192,7 +1191,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 							def diskSize = ComputeUtility.parseGigabytesToBytes(updateProps.size?.toLong())
 							def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${volumeId}"
 							def resizeResults = apiService.resizeDisk(hypervOpts, diskPath, diskSize)
-
 							if (resizeResults.success == true) {
 								StorageVolume existingVolume = context.services.storageVolume.get(storageVolumeId)
 								existingVolume.maxStorage = diskSize
@@ -1211,7 +1209,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						def diskPath = "${hypervOpts.diskRoot}\\${hypervOpts.serverFolder}\\${diskName}"
 						def diskResults = apiService.createDisk(hypervOpts, diskPath, diskSize)
 						log.debug("create disk: ${diskResults.success}")
-
 						if (diskResults.success == true && diskResults.error != true) {
 							def attachResults = apiService.attachDisk(hypervOpts, vmId, diskPath)
 							log.debug("attach: ${attachResults.success}")
@@ -1239,8 +1236,6 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 
 						def diskConfig = volume.config ?: getDiskConfig(computeServer, volume, hypervOpts)
 						def detachResults = apiService.detachDisk(hypervOpts, vmId, diskConfig.ControllerType, diskConfig.ControllerNumber, diskConfig.ControllerLocation)
-						log.debug ("detachResults.success: ${detachResults.success}")
-
 						log.debug ("detachResults.success: ${detachResults.success}")
 						if (detachResults.success == true) {
 							apiService.deleteDisk(hypervOpts, diskName)

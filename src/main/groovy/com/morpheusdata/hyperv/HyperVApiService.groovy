@@ -86,7 +86,7 @@ class HyperVApiService {
         fileList.each { Map fileItem ->
             Long contentLength = (Long) fileItem.contentLength
 			def fileResults = morpheusContext.services.fileCopy.copyToServer(opts.hypervisor, fileItem.copyRequestFileName, fileItem.targetPath, fileItem.inputStream, contentLength, null, true)
-            rtn.success = fileResults.success
+			rtn.success = fileResults.success
         }
         return rtn
     }
@@ -152,8 +152,7 @@ class HyperVApiService {
     def resizeDisk(opts, diskPath, diskSize) {
         def command = "Resize-VHD -Path \"${diskPath}\" -SizeBytes ${diskSize}"
         log.debug "resizeDisk: ${command}"
-        def out = executeCommand(command, opts)
-        return out
+        return executeCommand(command, opts)
     }
 
     def detachDisk(opts, vmId, controllerType, controllerNumber, controllerLocation) {
