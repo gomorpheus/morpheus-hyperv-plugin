@@ -376,6 +376,23 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				displayOrder:9,
 				fieldClass:null
 		)
+		nodeOptions << new OptionType(
+				name: 'osType',
+				category:'provisionType.hyperv.custom',
+				code: 'provisionType.hyperv.custom.containerType.osTypeId',
+				fieldContext: 'domain',
+				fieldName: 'osType.id',
+				fieldCode: 'gomorpheus.label.osType',
+				fieldLabel: 'OsType',
+				fieldGroup: null,
+				inputType: OptionType.InputType.SELECT,
+				displayOrder:15,
+				fieldClass:null,
+				required: false,
+				editable: true,
+				noSelection: 'Select',
+				optionSource: 'osTypes'
+		)
 
 		return nodeOptions
 	}
@@ -1290,6 +1307,10 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 
 		def prepareResponse = new PrepareHostResponse(computeServer: server, disableCloudInit: false, options: [sendIp: true])
 		ServiceResponse<PrepareHostResponse> rtn = ServiceResponse.prepare(prepareResponse)
+		if(server.sourceImage){
+			rtn.success = true
+			return rtn
+		}
 
 		try {
 			VirtualImage virtualImage
