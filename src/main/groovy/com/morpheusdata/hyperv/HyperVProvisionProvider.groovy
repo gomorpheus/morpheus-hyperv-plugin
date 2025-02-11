@@ -988,6 +988,11 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	String getName() {
+		return 'Hyper-V'
+	}
+
+	@Override
+	String getDefaultInstanceTypeDescription() {
 		return 'Hyper-V Provisioning'
 	}
 
