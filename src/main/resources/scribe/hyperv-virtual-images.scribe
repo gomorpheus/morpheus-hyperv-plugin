@@ -12,10 +12,24 @@ resource "virtual-image" "hyperv-image-morpheus-ubuntu-24_04" {
   computeServerImage = false
   isCloudInit        = true
   externalId         = null
-  osType             = "ubuntu.24.04.64"
+  osType = {
+    code = "ubuntu.24.04.64"
+    owner = null
+  }
   active             = true
   delete             = false
   zoneType           = "hyperv"
+}
+
+resource "os-type-image" "hyperv-image-morpheus-ubuntu-24_04" {
+  code               = "hyperv.image.morpheus.ubuntu.24.04.20240604.amd64"
+  provisionType      = "hyperv"
+  virtualImage       = virtual-image.hyperv-image-morpheus-ubuntu-24_04
+  account            = null
+  osType = {
+     code = "ubuntu.24.04.64"
+     owner = null
+  }
 }
 
 resource "virtual-image" "hyperv-image-morpheus-ubuntu-20_04" {
@@ -32,10 +46,24 @@ resource "virtual-image" "hyperv-image-morpheus-ubuntu-20_04" {
   computeServerImage = false
   isCloudInit        = true
   externalId         = null
-  osType             = "ubuntu.20.04.64"
+  osType = {
+    code = "ubuntu.20.04.64"
+    owner = null
+  }
   active             = true
   delete             = false
   zoneType           = "hyperv"
+}
+
+resource "os-type-image" "hyperv-image-morpheus-ubuntu-20_04" {
+  code               = "hyperv.image.morpheus.ubuntu.20.04.1-v1.ubuntu.20.04.1.amd64"
+  provisionType      = "hyperv"
+  virtualImage       = virtual-image.hyperv-image-morpheus-ubuntu-20_04
+  account            = null
+  osType = {
+     code = "ubuntu.20.04.64"
+     owner = null
+  }
 }
 
 resource "virtual-image" "hyperv-image-morpheus-ubuntu-18_04" {
@@ -53,9 +81,24 @@ resource "virtual-image" "hyperv-image-morpheus-ubuntu-18_04" {
   isCloudInit        = true
   externalId         = null
   osType             = "ubuntu.18.04.64"
+  osType = {
+    code = "ubuntu.18.04.64"
+    owner = null
+  }
   active             = true
   delete             = false
   zoneType           = "hyperv"
+}
+
+resource "os-type-image" "hyperv-image-morpheus-ubuntu-18_04" {
+  code               = "hyperv.image.morpheus.ubuntu.18.04.20240604.amd64"
+  provisionType      = "hyperv"
+  virtualImage       = virtual-image.hyperv-image-morpheus-ubuntu-18_04
+  account            = null
+  osType = {
+     code = "ubuntu.18.04.64"
+     owner = null
+  }
 }
 
 resource "virtual-image" "hyperv-image-morpheus-windows-2012-r2" {
@@ -72,10 +115,24 @@ resource "virtual-image" "hyperv-image-morpheus-windows-2012-r2" {
   trialVersion       = true
   isCloudInit        = false
   externalId         = null
-  osType             = "windows.server.2012"
+  osType = {
+    code = "windows.server.2012"
+    owner = null
+  }
   active             = true
   delete             = false
   zoneType           = "hyperv"
+}
+
+resource "os-type-image" "hyperv-image-morpheus-windows-2012-r2" {
+  code               = "hyperv.image.morpheus.windows.2012.r2"
+  provisionType      = "hyperv"
+  virtualImage       = virtual-image.hyperv-image-morpheus-windows-2012-r2
+  account            = null
+  osType = {
+     code = "windows.server.2012"
+     owner = null
+  }
 }
 
 resource "virtual-image" "hyperv-image-morpheus-ubuntu-16_04" {
@@ -90,6 +147,20 @@ resource "virtual-image" "hyperv-image-morpheus-ubuntu-16_04" {
   systemImage        = true
   installAgent       = true
   isCloudInit        = true
-  osType             = "ubuntu.16.04.64"
+  osType = {
+    code = "ubuntu.16.04.64"
+    owner = null
+  }
   zoneType           = "hyperv"
+}
+
+resource "os-type-image" "hyperv-image-morpheus-ubuntu-16_04" {
+  code               = "hyperv.image.morpheus.ubuntu.16.04.3-v1.ubuntu.16.04.3.amd64"
+  provisionType      = "hyperv"
+  virtualImage       = virtual-image.hyperv-image-morpheus-ubuntu-16_04
+  account            = null
+  osType = {
+     code = "ubuntu.16.04.64"
+     owner = null
+  }
 }
