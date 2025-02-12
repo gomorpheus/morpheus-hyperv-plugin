@@ -397,8 +397,8 @@ class HyperVCloudProvider implements CloudProvider {
 					if (cloud.enabled == true) {
 						def opts = [
 								hypervisor : [:],
-								sshHost    : cloudConfig.hypervHost,
-								sshPort    : cloudConfig.winrmPort,
+								sshHost    : cloudConfig.host,
+								sshPort    : cloudConfig.port,
 								sshUsername: validateCloudRequest?.credentialUsername,
 								sshPassword: validateCloudRequest?.credentialPassword,
 								zoneRoot   : cloudConfig.workingPath,
@@ -478,8 +478,8 @@ class HyperVCloudProvider implements CloudProvider {
 			if (serverInfo.hostname) {
 				newServer.hostname = serverInfo.hostname
 			}
-			newServer.sshHost = cloud.getConfigProperty('hypervHost')
-			newServer.sshPort = cloud.getConfigProperty('winrmPort') ? cloud.getConfigProperty('winrmPort').toInteger() : 5985
+			newServer.sshHost = cloud.getConfigProperty('host')
+			newServer.sshPort = cloud.getConfigProperty('port') ? cloud.getConfigProperty('port').toInteger() : 5985
 			newServer.internalIp = newServer.sshHost
 			newServer.externalIp = newServer.sshHost
 			newServer.sshUsername = HypervOptsUtility.getUsername(cloud)
@@ -839,7 +839,7 @@ class HyperVCloudProvider implements CloudProvider {
 			hypervOpts.zoneRoot = hypervisorOpts.zoneRoot
 			hypervOpts.diskRoot = hypervisorOpts.diskRoot
 			hypervOpts.vmRoot = hypervisorOpts.vmRoot
-			hypervOpts.sshPort = opts.zone.getConfigMap().winrmPort
+			hypervOpts.sshPort = opts.zone.getConfigMap().port
 
 			def hostResults = apiService.getHypervHost(hypervOpts)
 			log.debug("hostResults: ${hostResults}")
