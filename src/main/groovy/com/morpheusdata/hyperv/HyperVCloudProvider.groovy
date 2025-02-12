@@ -71,8 +71,8 @@ class HyperVCloudProvider implements CloudProvider {
 		Collection<OptionType> options = []
 		options << new OptionType(
 				name: 'Hyper-V Host',
-				code: 'zoneType.hyperv.hypervHost',
-				fieldName: 'hypervHost',
+				code: 'zoneType.hyperv.host',
+				fieldName: 'host',
 				displayOrder: displayOrder,
 				fieldCode: 'gomorpheus.optiontype.hypervHost',
 				fieldLabel:'Hyper-V Host',
@@ -82,8 +82,8 @@ class HyperVCloudProvider implements CloudProvider {
 		)
 		options << new OptionType(
 				name: 'Winrm Port',
-				code: 'zoneType.hyperv.winrmPort',
-				fieldName: 'winrmPort',
+				code: 'zoneType.hyperv.port',
+				fieldName: 'port',
 				displayOrder: displayOrder += 10,
 				fieldCode: 'gomorpheus.optiontype.winrmPort',
 				fieldLabel:'Winrm Port',
