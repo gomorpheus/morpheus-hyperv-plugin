@@ -70,26 +70,27 @@ class HyperVCloudProvider implements CloudProvider {
 		def displayOrder = 0
 		Collection<OptionType> options = []
 		options << new OptionType(
-				name: 'Host',
-				code: 'zoneType.hyperv.host',
-				fieldName: 'host',
+				name: 'Hyper-V Host',
+				code: 'zoneType.hyperv.hypervHost',
+				fieldName: 'hypervHost',
 				displayOrder: displayOrder,
-				fieldCode: 'gomorpheus.optiontype.Host',
-				fieldLabel:'Host',
+				fieldCode: 'gomorpheus.optiontype.hypervHost',
+				fieldLabel:'Hyper-V Host',
 				required: true,
 				inputType: OptionType.InputType.TEXT,
-				fieldContext: 'config',
+				fieldContext: 'config'
 		)
 		options << new OptionType(
-				name: 'Port',
-				code: 'zoneType.hyperv.port',
-				fieldName: 'port',
+				name: 'Winrm Port',
+				code: 'zoneType.hyperv.winrmPort',
+				fieldName: 'winrmPort',
 				displayOrder: displayOrder += 10,
-				fieldCode: 'gomorpheus.optiontype.Port',
-				fieldLabel:'Port',
+				fieldCode: 'gomorpheus.optiontype.winrmPort',
+				fieldLabel:'Winrm Port',
 				required: true,
 				inputType: OptionType.InputType.TEXT,
-				fieldContext: 'config',
+				defaultValue: '5985',
+				fieldContext: 'config'
 		)
 		options << new OptionType(
 				name: 'Working Path',
@@ -101,7 +102,7 @@ class HyperVCloudProvider implements CloudProvider {
 				required: true,
 				inputType: OptionType.InputType.TEXT,
 				fieldContext: 'config',
-				defaultValue: 'c:\\Temp'
+				placeHolderText: 'c:\\Temp'
 		)
 		options << new OptionType(
 				name: 'VM Path',
@@ -113,7 +114,7 @@ class HyperVCloudProvider implements CloudProvider {
 				required: true,
 				inputType: OptionType.InputType.TEXT,
 				fieldContext: 'config',
-				defaultValue: 'c:\\VMs',
+				placeHolderText: 'c:\\VMs'
 		)
 		options << new OptionType(
 				name: 'Disk Path',
@@ -125,7 +126,7 @@ class HyperVCloudProvider implements CloudProvider {
 				required: true,
 				inputType: OptionType.InputType.TEXT,
 				fieldContext: 'config',
-				defaultValue:'c:\\VirtualDisks',
+				placeHolderText:'c:\\VirtualDisks'
 		)
 		options << new OptionType(
 				name: 'Credentials',
@@ -396,8 +397,8 @@ class HyperVCloudProvider implements CloudProvider {
 					if (cloud.enabled == true) {
 						def opts = [
 								hypervisor : [:],
-								sshHost    : cloudConfig.host,
-								sshPort    : cloudConfig.port,
+								sshHost    : cloudConfig.hypervHost,
+								sshPort    : cloudConfig.winrmPort,
 								sshUsername: validateCloudRequest?.credentialUsername,
 								sshPassword: validateCloudRequest?.credentialPassword,
 								zoneRoot   : cloudConfig.workingPath,
@@ -477,8 +478,8 @@ class HyperVCloudProvider implements CloudProvider {
 			if (serverInfo.hostname) {
 				newServer.hostname = serverInfo.hostname
 			}
-			newServer.sshHost = cloud.getConfigProperty('host')
-			newServer.sshPort = cloud.getConfigProperty('port') ? cloud.getConfigProperty('port').toInteger() : 5985
+			newServer.sshHost = cloud.getConfigProperty('hypervHost')
+			newServer.sshPort = cloud.getConfigProperty('winrmPort') ? cloud.getConfigProperty('winrmPort').toInteger() : 5985
 			newServer.internalIp = newServer.sshHost
 			newServer.externalIp = newServer.sshHost
 			newServer.sshUsername = HypervOptsUtility.getUsername(cloud)
@@ -673,7 +674,7 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	Boolean supportsDistributedWorker() {
-		return true
+		return false
 	}
 
 	/**
@@ -838,7 +839,7 @@ class HyperVCloudProvider implements CloudProvider {
 			hypervOpts.zoneRoot = hypervisorOpts.zoneRoot
 			hypervOpts.diskRoot = hypervisorOpts.diskRoot
 			hypervOpts.vmRoot = hypervisorOpts.vmRoot
-			hypervOpts.sshPort = opts.zone.getConfigMap().port
+			hypervOpts.sshPort = opts.zone.getConfigMap().winrmPort
 
 			def hostResults = apiService.getHypervHost(hypervOpts)
 			log.debug("hostResults: ${hostResults}")
