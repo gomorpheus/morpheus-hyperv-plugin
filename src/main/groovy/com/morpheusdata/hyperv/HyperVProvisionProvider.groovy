@@ -1029,13 +1029,22 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	}
 
 	@Override
+	Boolean canCustomizeDataVolumes() {
+		return true
+	}
+	@Override
+	Boolean canResizeRootVolume() {
+		return true
+	}
+
+	@Override
 	HostType getHostType() {
 		return HostType.vm
 	}
 
 	@Override
 	String serverType() {
-		return "vm"
+		return HostType.vm
 	}
 
 	@Override
@@ -1070,7 +1079,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 
 	@Override
 	String getNodeFormat() {
-		return "vm"
+		return HostType.vm
 	}
 
 	@Override
