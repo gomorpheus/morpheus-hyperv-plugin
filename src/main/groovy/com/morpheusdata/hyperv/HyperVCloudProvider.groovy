@@ -630,6 +630,11 @@ class HyperVCloudProvider implements CloudProvider {
 		return true
 	}
 
+    @Override
+    Boolean canCreateNetworks() {
+        return true
+    }
+
 	/**
 	 * Returns whether a cloud supports {@link CloudFolder}
 	 * @return Boolean
