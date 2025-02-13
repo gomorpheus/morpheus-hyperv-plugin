@@ -1005,7 +1005,12 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	String getName() {
-		return 'Hyper-V Provisioning'
+		return 'Hyper-V'
+	}
+
+	@Override
+	String getDefaultInstanceTypeDescription() {
+		return 'Spin up any VM Image on your hyper-v based infrastructure.'
 	}
 
 	@Override
@@ -1024,13 +1029,22 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	}
 
 	@Override
+	Boolean canCustomizeDataVolumes() {
+		return true
+	}
+	@Override
+	Boolean canResizeRootVolume() {
+		return true
+	}
+
+	@Override
 	HostType getHostType() {
 		return HostType.vm
 	}
 
 	@Override
 	String serverType() {
-		return "vm"
+		return HostType.vm
 	}
 
 	@Override
@@ -1065,7 +1079,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 
 	@Override
 	String getNodeFormat() {
-		return "vm"
+		return HostType.vm
 	}
 
 	@Override
