@@ -162,6 +162,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				fieldLabel: 'Host',
 				fieldGroup:'Options',
 				displayOrder: 10,
+				optionSource: 'hypervHost',
 				required: true,
 				enabled: true,
 				editable:false,
