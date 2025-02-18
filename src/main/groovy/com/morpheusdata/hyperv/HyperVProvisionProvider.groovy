@@ -478,7 +478,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			String generation = 'generation1'
 			hypervOpts += HypervOptsUtility.getHypervHypervisorOpts(node)
 			hypervOpts.hypervisor = node
-			if (containerConfig.imageId || containerConfig.template || workload.workloadType.virtualImage?.id) {
+			if (containerConfig.imageId || containerConfig.template || server.sourceImage?.id) {
 				def virtualImageId = (containerConfig.imageId?.toLong() ?: containerConfig.template?.toLong() ?: server.sourceImage.id)
 				virtualImage = context.async.virtualImage.get(virtualImageId).blockingGet()
 				generation = virtualImage.getConfigProperty('generation')
