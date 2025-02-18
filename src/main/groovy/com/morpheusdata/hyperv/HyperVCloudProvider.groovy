@@ -651,7 +651,7 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	Boolean hasDatastores() {
-		return true
+		return false
 	}
 
 	/**
