@@ -70,26 +70,27 @@ class HyperVCloudProvider implements CloudProvider {
 		def displayOrder = 0
 		Collection<OptionType> options = []
 		options << new OptionType(
-				name: 'Host',
+				name: 'Hyper-V Host',
 				code: 'zoneType.hyperv.host',
 				fieldName: 'host',
 				displayOrder: displayOrder,
-				fieldCode: 'gomorpheus.optiontype.Host',
-				fieldLabel:'Host',
+				fieldCode: 'gomorpheus.optiontype.hypervHost',
+				fieldLabel:'Hyper-V Host',
 				required: true,
 				inputType: OptionType.InputType.TEXT,
-				fieldContext: 'config',
+				fieldContext: 'config'
 		)
 		options << new OptionType(
-				name: 'Port',
+				name: 'Winrm Port',
 				code: 'zoneType.hyperv.port',
 				fieldName: 'port',
 				displayOrder: displayOrder += 10,
-				fieldCode: 'gomorpheus.optiontype.Port',
-				fieldLabel:'Port',
+				fieldCode: 'gomorpheus.optiontype.winrmPort',
+				fieldLabel:'Winrm Port',
 				required: true,
 				inputType: OptionType.InputType.TEXT,
-				fieldContext: 'config',
+				defaultValue: '5985',
+				fieldContext: 'config'
 		)
 		options << new OptionType(
 				name: 'Working Path',
@@ -101,7 +102,7 @@ class HyperVCloudProvider implements CloudProvider {
 				required: true,
 				inputType: OptionType.InputType.TEXT,
 				fieldContext: 'config',
-				defaultValue: 'c:\\Temp'
+				placeHolderText: 'c:\\Temp'
 		)
 		options << new OptionType(
 				name: 'VM Path',
@@ -113,7 +114,7 @@ class HyperVCloudProvider implements CloudProvider {
 				required: true,
 				inputType: OptionType.InputType.TEXT,
 				fieldContext: 'config',
-				defaultValue: 'c:\\VMs',
+				placeHolderText: 'c:\\VMs'
 		)
 		options << new OptionType(
 				name: 'Disk Path',
@@ -125,7 +126,7 @@ class HyperVCloudProvider implements CloudProvider {
 				required: true,
 				inputType: OptionType.InputType.TEXT,
 				fieldContext: 'config',
-				defaultValue:'c:\\VirtualDisks',
+				placeHolderText:'c:\\VirtualDisks'
 		)
 		options << new OptionType(
 				name: 'Credentials',
@@ -630,6 +631,11 @@ class HyperVCloudProvider implements CloudProvider {
 		return true
 	}
 
+    @Override
+    Boolean canCreateNetworks() {
+        return true
+    }
+
 	/**
 	 * Returns whether a cloud supports {@link CloudFolder}
 	 * @return Boolean
@@ -645,7 +651,7 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	Boolean hasDatastores() {
-		return true
+		return false
 	}
 
 	/**
@@ -673,7 +679,7 @@ class HyperVCloudProvider implements CloudProvider {
 	 */
 	@Override
 	Boolean supportsDistributedWorker() {
-		return true
+		return false
 	}
 
 	/**
