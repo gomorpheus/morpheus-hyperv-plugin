@@ -153,7 +153,8 @@ class HyperVVirtualImageDatasetProvider extends AbstractDatasetProvider<VirtualI
                     new DataOrFilter(
                             new DataFilter("visibility", "public"),
                             new DataFilter("accounts.id", datasetQuery.get("accountId")?.toLong()),
-                            new DataFilter("owner.id", datasetQuery.get("accountId")?.toLong())
+                            new DataFilter("owner.id", datasetQuery.get("accountId")?.toLong()),
+                            new DataFilter("systemImage", true)
                     ),
                     new DataFilter("imageType", 'vhd'),
                     new DataOrFilter(
@@ -161,7 +162,11 @@ class HyperVVirtualImageDatasetProvider extends AbstractDatasetProvider<VirtualI
                                     new DataFilter("refType", 'ComputeZone'),
                                     new DataFilter('refId', tmpZone?.id?.toString())
                             ),
-                            new DataFilter('userUploaded', true)
+                            new DataFilter('userUploaded', true),
+                            new DataAndFilter(
+                                    new DataFilter("location.refType", 'ComputeZone'),
+                                    new DataFilter('location.refId', tmpZone?.id?.toString())
+                            )
                     )
             )
             log.info("Ray :: DatasetProvider: buildQuery: inside if: ${query}")

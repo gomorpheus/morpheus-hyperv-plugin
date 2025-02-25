@@ -1,0 +1,104 @@
+resource "option-type" "provisionType-hyperv-template" {
+  code         = "provisionType.hyperv.template"
+  type         = "select"
+  name         = "template"
+  category     = "provisionType.hyperv"
+  fieldName    = "template"
+  optionSource = "hypervImage"
+  fieldCode    = "gomorpheus.optiontype.Template"
+  fieldLabel   = "Template"
+  fieldContext = "config"
+  fieldGroup   = "Options"
+  required     = false
+  enabled      = true
+  editable     = false
+  global       = false
+  placeHolder  = null
+  helpBlock    = ""
+  defaultValue = null
+  custom       = false
+  displayOrder = 8
+  fieldClass   = null
+  visibleOnCode = null
+  description  = "Choose from a list of Virtual Images that might want to be provisioned."
+}
+
+resource "workload-type" "hyperv-1_0" {
+  code             = "hyperv-1.0"
+  shortName        = "hyperv"
+  name             = "Hyperv"
+  ports = []
+  containerVersion = "1.0"
+  repositoryImage  = ""
+  entryPoint       = ""
+  category         = "hyperv"
+  statTypeCode     = "vm"
+  logTypeCode      = "hyperv"
+  checkTypeCode    = "containerCheck"
+  serverType       = "vm"
+  mountPoint       = "/data"
+  provisionType    = "hyperv"
+  actions = ["generic-remove-node"]
+}
+
+resource "workload-type-set" "hyperv-1_0-set" {
+  code           = "hyperv-1.0-set"
+  workloadType   = workload-type.hyperv-1_0
+  priorityOrder  = 0
+  dynamicCount   = true
+  containerCount = 1
+}
+
+resource "instance-type" "hyperv" {
+  code                    = "hyperv"
+  name                    = "Hyper-V"
+  category                = "cloud"
+  active                  = true
+  enabled                 = true
+  viewSet                 = "hyperv"
+  stackTier               = 30
+  hasConfig               = false
+  hasSettings             = false
+  hasDeployment           = false
+  deploymentService       = "defaultDeployService"
+  versions = ["1.0"]
+  hasAutoScale            = true
+  description             = "Spin up any VM Image on your hyper-v based infrastructure."
+  provisionService        = "hypervContainerService"
+  provisionTypeDefault    = true
+  environmentPrefix       = "HYPERV"
+  provisionSelectType     = "zone"
+  provisionType           = "hyperv"
+  pluginIconPath          = "hyperv-light.svg"
+  pluginIconDarkPath      = "hyperv-dark.svg"
+  pluginIconHidpiPath     = "hyperv-light0.svg"
+  pluginIconDarkHidpiPath = "hyperv-dark.svg"
+  optionTypes             = [
+    "provisionType.hyperv.template", "provisionType.hyperv.port"
+  ]
+}
+
+resource "instance-type-layout" "hyperv-1_0-single" {
+  code            = "hyperv-1.0-single"
+  name            = "Hyperv VM"
+  sortOrder       = 0
+  instanceVersion = "1.0"
+  description     = "This will provision a single vm"
+  instanceType    = instance-type.hyperv
+  serverCount     = 1
+  portCount       = 1
+  enabled         = true
+  creatable       = true
+  containers      = [workload-type-set.hyperv-1_0-set]
+  actions         = ["generic-add-node"]
+  optionTypes     = []
+  provisionType   = "hyperv"
+}
+
+resource "scale-action" "hyperv-1_0-single" {
+  code       = "hyperv-1.0-single"
+  scaleType  = "action"
+  layout     = instance-type-layout.hyperv-1_0-single
+  upAction   = "generic-add-node"
+  downAction = "generic-remove-node"
+}
