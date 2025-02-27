@@ -710,6 +710,7 @@ class HyperVCloudProvider implements CloudProvider {
 		log.debug("deleteServer: ${computeServer}")
 		def rtn = [success: false]
 		try {
+			log.info("RAZI :: deleteServer >> computeServer.parentServer: ${computeServer?.parentServer}")
 			def hypervOpts = HypervOptsUtility.getAllHypervServerOpts(context, computeServer)
 			def stopResults = apiService.stopServer(hypervOpts + [turnOff: true], hypervOpts.name)
 			if(stopResults.success == true) {

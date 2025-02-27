@@ -3,6 +3,7 @@ package com.morpheusdata.hyperv.utils
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.data.DataQuery
 import com.morpheusdata.hyperv.HyperVApiService
+import com.morpheusdata.model.Cloud
 import com.morpheusdata.model.Workload
 import groovy.util.logging.Slf4j
 
@@ -14,10 +15,19 @@ class HypervOptsUtility {
 
     static getAllHypervServerOpts(MorpheusContext context, server) {
         def rtn = getHypervZoneOpts(context, server.cloud)
+        log.info("RAZI :: getAllHypervServerOpts >> server.parentServer: ${server.parentServer}")
         rtn += getHypervHypervisorOpts(server.parentServer)
+//        def hypervisor = pickHypervHypervisor(context, server.cloud)
+//        rtn += getHypervHypervisorOpts(hypervisor)
         rtn += getHypervServerOpts(context, server)
         return rtn
     }
+
+//    static pickHypervHypervisor(MorpheusContext context, Cloud cloud) {
+//        def hypervisorList = context.services.computeServer.list(new DataQuery()
+//                .withFilter('zone.id', cloud.id).withFilter('computeServerType.code', 'hypervHypervisor'))
+//        return hypervisorList?.size() > 0 ? hypervisorList.first() : null
+//    }
 
     static getHypervServerOpts(MorpheusContext context, server) {
         def zoneConfig = server.cloud.getConfigMap()
@@ -77,6 +87,7 @@ class HypervOptsUtility {
     }
 
     static getHypervHypervisorOpts(hypervisor) {
+        log.info("RAZI :: getHypervHypervisorOpts >> hypervisor: ${hypervisor}")
         def serverConfig = hypervisor.getConfigMap()
         log.info("hyperv config: ${serverConfig}")
         def vmRoot = serverConfig.vmPath?.length() > 0 ? serverConfig.vmPath : HyperVApiService.defaultRoot + '\\VMs'
