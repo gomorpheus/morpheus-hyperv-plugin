@@ -4,7 +4,7 @@ resource "option-type" "provisionType-hyperv-template" {
   name         = "template"
   category     = "provisionType.hyperv"
   fieldName    = "template"
-  optionSource = "hypervImage"
+  optionSource = "hyperv.hypervImage"
   fieldCode    = "gomorpheus.optiontype.Template"
   fieldLabel   = "Template"
   fieldContext = "config"

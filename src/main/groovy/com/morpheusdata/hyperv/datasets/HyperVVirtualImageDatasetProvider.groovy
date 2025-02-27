@@ -24,7 +24,6 @@ class HyperVVirtualImageDatasetProvider extends AbstractDatasetProvider<VirtualI
     public static final providerDescription = 'Get virtual images for Hyper-V provisioning.'
 
     HyperVVirtualImageDatasetProvider(Plugin plugin, MorpheusContext morpheus) {
-        log.info("Ray :: HyperVVirtualImageDatasetProvider loaded.......")
         this.plugin = plugin
         this.morpheusContext = morpheus
     }
@@ -55,19 +54,8 @@ class HyperVVirtualImageDatasetProvider extends AbstractDatasetProvider<VirtualI
      */
     @Override
     Observable<VirtualImage> list(DatasetQuery datasetQuery) {
-        log.info("Ray :: DatasetProvider: list")
         DataQuery query = buildQuery(datasetQuery)
-        def images = morpheus.async.virtualImage.list(query)
-        def listImages = images?.toList().blockingGet()
-        log.info("Ray :: DatasetProvider: list: listImages: ${listImages}")
-        log.info("Ray :: DatasetProvider: list: listImages?.size(): ${listImages?.size()}")
-        if (listImages?.size() > 0) {
-            listImages.each {it ->
-                log.info("Ray :: DatasetProvider: list: it->: ${it.id} - ${it.name}")
-            }
-        }
-        return images
-
+        return morpheus.async.virtualImage.list(query)
     }
 
     /**
@@ -77,11 +65,8 @@ class HyperVVirtualImageDatasetProvider extends AbstractDatasetProvider<VirtualI
      */
     @Override
     Observable<Map> listOptions(DatasetQuery datasetQuery) {
-        log.info("Ray :: DatasetProvider: listOptions")
         DataQuery query = buildQuery(datasetQuery)
-        log.info("Ray :: DatasetProvider: listOptions: query: ${query}")
         morpheus.async.virtualImage.listIdentityProjections(query).map { VirtualImageIdentityProjection item ->
-            log.info ("Ray :: DatasetProvider: listOptions: item-> ${item.id} - ${item.name}")
             return [name: item.name, value: item.id]
         }
     }
@@ -138,15 +123,8 @@ class HyperVVirtualImageDatasetProvider extends AbstractDatasetProvider<VirtualI
     }
 
     DataQuery buildQuery(DatasetQuery datasetQuery) {
-        log.info("Ray :: DatasetProvider: buildQuery: datasetQuery: ${datasetQuery}")
-        log.info("Ray :: DatasetProvider: buildQuery: datasetQuery.parameters: ${datasetQuery.parameters}")
         Long cloudId = datasetQuery.get("zoneId")?.toLong()
-        log.info("Ray :: DatasetProvider: buildQuery: cloudId: ${cloudId}")
         Cloud tmpZone = cloudId ? morpheus.services.cloud.get(cloudId) : null
-        log.info("Ray :: DatasetProvider: buildQuery: tmpZone: ${tmpZone}")
-        log.info("Ray :: DatasetProvider: buildQuery: tmpZone?.id: ${tmpZone?.id}")
-        log.info("Ray :: DatasetProvider: buildQuery: tmpZone?.cloudType?.code: ${tmpZone?.cloudType?.code}")
-        //log.info("query parameters: ${datasetQuery.parameters}")
         DataQuery query
         if (!tmpZone || tmpZone?.cloudType?.code == 'hyperv') {
             query = new DatasetQuery().withFilters(
@@ -164,15 +142,13 @@ class HyperVVirtualImageDatasetProvider extends AbstractDatasetProvider<VirtualI
                             ),
                             new DataFilter('userUploaded', true),
                             new DataAndFilter(
-                                    new DataFilter("location.refType", 'ComputeZone'),
-                                    new DataFilter('location.refId', tmpZone?.id?.toString())
+                                    new DataFilter("locations.refType", 'ComputeZone'),
+                                    new DataFilter('locations.refId', tmpZone?.id?.toString())
                             )
                     )
             )
-            log.info("Ray :: DatasetProvider: buildQuery: inside if: ${query}")
             return query.withSort("name", DataQuery.SortOrder.asc)
         }
-        log.info("Ray :: DatasetProvider: buildQuery: outside if: ${query}")
         return query
     }
 }
