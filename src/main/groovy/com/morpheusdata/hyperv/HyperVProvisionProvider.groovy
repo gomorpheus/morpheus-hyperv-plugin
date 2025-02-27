@@ -124,6 +124,16 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	}
 
 	/**
+	 * For most provision types, a default instance type is created upon plugin registration.  Override this method if
+	 * you do NOT want to create a default instance type for your provision provider
+	 * @return defaults to true
+	 */
+	@Override
+	Boolean createDefaultInstanceType() {
+		return false
+	}
+
+	/**
 	 * Provides a Collection of OptionType inputs that need to be made available to various provisioning Wizards
 	 * @return Collection of OptionTypes
 	 */
@@ -513,13 +523,13 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						imageId = imageResults.imageId
 						def locationConfig = [
 								virtualImage: virtualImage,
-								code        : "hyperv.image.${cloud.id}.${virtualImage.externalId}",
-								internalId  : virtualImage.externalId,
-								externalId  : virtualImage.externalId,
+								code        : "hyperv.image.${cloud.id}.${imageId}",
+								internalId  : imageId,
+								externalId  : imageId,
 								imageName   : virtualImage.name
 						]
 						VirtualImageLocation location = new VirtualImageLocation(locationConfig)
-						context.services.virtualImage.location.create(location)
+						context.services.virtualImage.location.create(location, cloud)
 					} else {
 						provisionResponse.success = false
 					}
