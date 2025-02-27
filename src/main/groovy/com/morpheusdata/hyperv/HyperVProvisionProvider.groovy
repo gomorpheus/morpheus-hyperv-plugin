@@ -824,8 +824,15 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	 */
 	@Override
 	ServiceResponse restartWorkload(Workload workload) {
-		// Generally a call to stopWorkLoad() and then startWorkload()
-		return ServiceResponse.success()
+		log.debug("restartWorkload: ${workload.id}")
+		ServiceResponse rtn = ServiceResponse.prepare()
+		ServiceResponse stopResult = stopWorkload(workload)
+		if (stopResult.success) {
+			rtn = startWorkload(workload)
+		} else {
+			rtn = stopResult
+		}
+		return rtn
 	}
 
 	/**
