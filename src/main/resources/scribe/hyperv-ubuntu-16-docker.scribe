@@ -1,0 +1,54 @@
+resource "workload-type" "docker-hyperv-ubuntu-16_04" {
+  code              = "docker-hyperv-ubuntu-16.04"
+  name              = "Docker Ubuntu 16.04"
+  shortName        = "ubuntu"
+  ports             = ["22"]
+  containerVersion = "16.04"
+  containerType    = "docker"
+  repositoryImage  = null
+  imageCode        = "morpheus ubuntu 16.04"
+  entryPoint       = null
+  mountLogs        = "/var/log"
+  statTypeCode    = "server"
+  logTypeCode     = "ubuntu"
+  showServerLogs  = true
+  category          = "ubuntu"
+  cloneType        = "ubuntu"
+  priorityOrder    = 0
+  serverType       = "vm"
+  providerType     = "hyperv"
+  checkTypeCode   = "vmCheck"
+  virtualImage     = virtual-image.hyperv-image-morpheus-ubuntu-16_04
+  containerPorts   = ["ubuntu.22"]
+  provisionType    = "hyperv"
+}
+
+resource "compute-type-set" "docker-hyperv-ubuntu-16_04-set" {
+  code                      = "docker-hyperv-ubuntu-16.04-set"
+  name                      = "docker host"
+  containerType            = workload-type.docker-hyperv-ubuntu-16_04
+  computeServerType       = "hypervLinux"
+  category                  = "ubuntu"
+  priorityOrder            = 0
+  dynamicCount             = true
+  nodeCount                = 1
+  nodeType                 = "worker"
+  canAddNodes             = true
+  installContainerRuntime = true
+  installStorageRuntime   = true
+}
+
+resource "compute-type-layout" "docker-hyperv-ubuntu-16_04-single" {
+  code                = "docker-hyperv-ubuntu-16.04-single"
+  name                = "Hyper-V Docker Host"
+  sortOrder          = 5
+  computeVersion     = "16.04"
+  description         = "This will provision a single docker host vm in hyperv"
+  type                = "hypervLinux"
+  serverCount        = 1
+  memoryRequirement  = (1024 * 1024 * 1024)
+  hasAutoScale      = true
+  groupType          = "docker-cluster"
+  computeServers     = [compute-type-set.docker-hyperv-ubuntu-16_04-set]
+  provisionType      = "hyperv"
+}

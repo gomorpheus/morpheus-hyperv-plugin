@@ -90,9 +90,9 @@ jar {
 				'Morpheus-Description': 'Plugin for Hyper-V',
 				'Morpheus-Logo': 'assets/hyperv.svg',
 				'Morpheus-Logo-Dark': 'assets/hyperv.svg',
-				'Morpheus-Labels': 'Plugin',
-				'Morpheus-Repo': 'https://github.com/gomorpheus/example',
-				'Morpheus-Min-Appliance-Version': "7.0.6"
+				'Morpheus-Labels': 'Plugin, Cloud',
+				'Morpheus-Repo': 'https://github.com/gomorpheus/morpheus-hyperv-plugin',
+				'Morpheus-Min-Appliance-Version': "8.0.3"
 		)
 	}
 }

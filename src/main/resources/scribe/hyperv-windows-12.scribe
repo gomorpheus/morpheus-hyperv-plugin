@@ -54,5 +54,5 @@ resource "scale-action" "hyperv-windows-2012_r2_core-single" {
   scaleType  = "action"
   layout      = instance-type-layout.hyperv-windows-2012_r2-single
   upAction   = "generic-add-node"
-  downAction = "generic-add-node"
+  downAction = "generic-remove-node"
 }
