@@ -210,8 +210,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 				required: false,
 				editable: true,
 				noSelection: 'Select',
-				optionSourceType: "hyperv",
-				optionSource: 'hypervVirtualImages'
+				optionSource: 'hyperv.hypervVirtualImages'
 		)
 		nodeOptions << new OptionType(
 				name: 'osType',

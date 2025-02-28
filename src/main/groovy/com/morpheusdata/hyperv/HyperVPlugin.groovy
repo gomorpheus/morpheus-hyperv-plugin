@@ -16,6 +16,7 @@
 package com.morpheusdata.hyperv
 
 import com.morpheusdata.core.Plugin
+import com.morpheusdata.hyperv.datasets.HyperVVMDatasetProvider
 import com.morpheusdata.hyperv.datasets.HyperVVirtualImageDatasetProvider
 
 class HyperVPlugin extends Plugin {
@@ -32,7 +33,8 @@ class HyperVPlugin extends Plugin {
                 new HyperVCloudProvider(this,this.morpheus),
                 new HyperVProvisionProvider(this,this.morpheus),
                 new HyperVBackupProvider(this,this.morpheus),
-                new HyperVVirtualImageDatasetProvider(this, this.morpheus)
+                new HyperVVirtualImageDatasetProvider(this, this.morpheus),
+                new HyperVVMDatasetProvider(this, this.morpheus)
         )
     }
 
