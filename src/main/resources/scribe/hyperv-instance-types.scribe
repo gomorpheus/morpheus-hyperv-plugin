@@ -69,10 +69,10 @@ resource "instance-type" "hyperv" {
   environmentPrefix       = "HYPERV"
   provisionSelectType     = "zone"
   provisionType           = "hyperv"
-  pluginIconPath          = "hyperv-light.svg"
-  pluginIconDarkPath      = "hyperv-dark.svg"
-  pluginIconHidpiPath     = "hyperv-light0.svg"
-  pluginIconDarkHidpiPath = "hyperv-dark.svg"
+  pluginIconPath          = "hyperv.svg"
+  pluginIconDarkPath      = "hyperv.svg"
+  pluginIconHidpiPath     = "hyperv.svg"
+  pluginIconDarkHidpiPath = "hyperv.svg"
   optionTypes             = [
     "provisionType.hyperv.template", "provisionType.hyperv.port"
   ]
