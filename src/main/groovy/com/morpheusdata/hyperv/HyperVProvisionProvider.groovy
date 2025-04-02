@@ -140,27 +140,28 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 	@Override
 	Collection<OptionType> getOptionTypes() {
 		Collection<OptionType> options = []
-		options << new OptionType(
-				name: 'skip agent install',
-				code: 'provisionType.hyperv.noAgent',
-				category: 'provisionType.hyperv',
-				inputType: OptionType.InputType.CHECKBOX,
-				fieldName: 'noAgent',
-				fieldContext: 'config',
-				fieldCode: 'gomorpheus.optiontype.SkipAgentInstall',
-				fieldLabel: 'Skip Agent Install',
-				fieldGroup:'Advanced Options',
-				displayOrder: 4,
-				required: false,
-				enabled: true,
-				editable:false,
-				global:false,
-				placeHolder:null,
-				helpBlock:'Skipping Agent installation will result in a lack of logging and guest operating system statistics. Automation scripts may also be adversely affected.',
-				defaultValue:null,
-				custom:false,
-				fieldClass:null
-		)
+		// this isn't currently used, but could easily be added in the future
+		// options << new OptionType(
+		// 		name: 'skip agent install',
+		// 		code: 'provisionType.hyperv.noAgent',
+		// 		category: 'provisionType.hyperv',
+		// 		inputType: OptionType.InputType.CHECKBOX,
+		// 		fieldName: 'noAgent',
+		// 		fieldContext: 'config',
+		// 		fieldCode: 'gomorpheus.optiontype.SkipAgentInstall',
+		// 		fieldLabel: 'Skip Agent Install',
+		// 		fieldGroup:'Advanced Options',
+		// 		displayOrder: 4,
+		// 		required: false,
+		// 		enabled: true,
+		// 		editable:false,
+		// 		global:false,
+		// 		placeHolder:null,
+		// 		helpBlock:'Skipping Agent installation will result in a lack of logging and guest operating system statistics. Automation scripts may also be adversely affected.',
+		// 		defaultValue:null,
+		// 		custom:false,
+		// 		fieldClass:null
+		// )
 		options << new OptionType(
 				name: 'host',
 				code: 'provisionType.hyperv.host',
