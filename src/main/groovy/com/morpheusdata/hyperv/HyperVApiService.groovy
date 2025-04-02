@@ -21,8 +21,7 @@ class HyperVApiService {
     static defaultRoot = 'C:\\morpheus'
 
     def executeCommand(command, opts) {
-        def output = morpheusContext.executeWindowsCommand(opts.sshHost, opts.sshPort?.toInteger(), opts.sshUsername, opts.sshPassword, command, null, false).blockingGet()
-        return output
+   		return morpheusContext.executeWindowsCommand(opts.sshHost, opts.sshPort?.toInteger(), opts.sshUsername, opts.sshPassword, command, null, false).blockingGet()
     }
 
     def prepareNode(opts) {
@@ -788,7 +787,7 @@ class HyperVApiService {
             def out = executeCommand(command, opts)
             rtn.success = out.success && out.exitCode == '0'
             if (!rtn.success) {
-                if (out.errorOutput?.contains("Hyper-V was unable to find a virtual machine with")) {
+                if (out.error?.contains("Hyper-V was unable to find a virtual machine with")) {
                     // Don't fail if the Snapshot isn't there
                     rtn.success = true
                 }
