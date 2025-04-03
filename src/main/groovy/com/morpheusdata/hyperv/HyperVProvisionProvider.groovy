@@ -624,10 +624,12 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 						def storageVolumes = server.volumes
 						def rootVolume = storageVolumes.find { it.rootVolume == true }
 						rootVolume.externalId = serverDisks.osDisk?.externalId
+						context.services.storageVolume.save(rootVolume)
 						storageVolumes.each { storageVolume ->
 							def dataDisk = serverDisks.dataDisks.find { it.id == storageVolume.id }
 							if (dataDisk) {
 								storageVolume.externalId = dataDisk.externalId
+								context.services.storageVolume.save(storageVolume)
 							}
 						}
 					}
@@ -1173,6 +1175,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 			def vmId = computeServer.externalId
 			def hypervOpts = isWorkload ? HypervOptsUtility.getAllHypervWorloadOpts(context, workload) : HypervOptsUtility.getAllHypervServerOpts(context, computeServer)
 			def stopResults = isWorkload ? stopWorkload(workload) : stopServer(computeServer)
+			log.debug("resizeWorkloadAndServer stopResults: ${stopResults}")
 			if (stopResults.success == true) {
 				if (neededMemory != 0 || neededCores != 0) {
 					def resizeOpts = [:]
@@ -1215,7 +1218,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 								existingVolume.maxStorage = diskSize
 								context.services.storageVolume.save(existingVolume)
 							} else {
-								log.error "Error in resizing volume: ${resizeResults}"
+								log.error "Error in resizing volume: ${resizeResults.error ?: resizeResults.output}"
 								rtn.error = resizeResults.error ?: "Error in resizing volume"
 							}
 						}
