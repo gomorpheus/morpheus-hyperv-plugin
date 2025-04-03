@@ -660,6 +660,7 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					} else {
 						server.statusMessage = 'Failed to run server'
 						context.async.computeServer.save(server).blockingGet()
+						provisionResponse.message = 'Failed to run server'
 						provisionResponse.success = false
 					}
 				} else {
@@ -670,11 +671,15 @@ class HyperVProvisionProvider extends AbstractProvisionProvider implements Workl
 					}
 					server.statusMessage = 'Failed to create server'
 					context.async.computeServer.save(server).blockingGet()
+					provisionResponse.message = 'Failed to create server'
 					provisionResponse.success = false
 				}
 			} else {
 				server.statusMessage = 'Failed to upload image'
 				context.async.computeServer.save(server).blockingGet()
+				provisionResponse.message = 'Failed to upload image'
+				provisionResponse.success = false
+
 			}
 			provisionResponse.noAgent = opts.noAgent ?: false
 			if (provisionResponse.success != true) {
